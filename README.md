@@ -15,8 +15,8 @@ Installing
 
 Make sure that `python3` is available on your machine.
 `xTB` and `CREST` have to be available and at least 
-one QM-package (TURBOMOLE version >= 7.2 or ORCA version
->= 4) has to be installed on your setup.
+one QM-package (TURBOMOLE version >= 7.2 or 
+ORCA version >= 4) has to be installed on your setup.
 
 Documentation
 -------------
