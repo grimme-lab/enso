@@ -2767,6 +2767,7 @@ class qm_job:
                 xcout.write("$thermo\n")
                 xcout.write("    temp={}\n".format(args.temperature))
                 xcout.write("$end")
+            time.sleep(0.05)
             with open(
                 os.path.join(self.workdir, "ohess.out"), "w", newline=None
             ) as outputfile:
@@ -2828,9 +2829,15 @@ class qm_job:
                 newline=None,
             ) as f:
                 data = json.load(f)
+            if "ZPVE" not in data:
+                data["ZPVE"] = 0.0
             if "G(T)" in data:
-                self.rrho = data["G(T)"]
-                self.success = True
+                if float(args.temperature) == 0:
+                    self.rrho = data["ZPVE"]
+                    self.success = True
+                else:
+                    self.rrho = data["G(T)"]
+                    self.success = True
                 if "point group" in data:
                     self.symmetry = data["point group"]
             else:
@@ -3049,23 +3056,40 @@ class qm_job:
                 param = "normal"
 
             # cefine
-            s = subprocess.check_output(
-                cosmo_cefine[param],
-                shell=False,
-                stdin=None,
-                stderr=subprocess.STDOUT,
-                universal_newlines=False,
-                cwd=self.workdir,
-            )
-            output = s.decode("ISO-8859-1").splitlines()
-            # checkoutput for errors
-            for line in output:
-                if "define ended abnormally" not in line:
-                    pass
-                else:
-                    print("cefine in cosmosolv broke down! ERROR!")
-                    self.success = False
-                    return 1
+            for k in range(2):
+                s = subprocess.check_output(
+                    cosmo_cefine[param],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                )
+                time.sleep(0.15)
+                output = s.decode("utf-8").splitlines()
+                # checkoutput for errors
+                for line in output:
+                    if "define ended abnormally" in line:
+                        self.success = False
+                        return 1
+                # check if wrong functional was written by cefine
+                with open(
+                    os.path.join(self.workdir, "control"),
+                    "r",
+                    encoding=coding,
+                    newline=None,
+                ) as control:
+                    checkup = control.readlines()
+                for line in checkup:
+                    if "functional" in line:
+                        if "b-p" not in line:
+                            print(
+                                "Wrong functional in control file"
+                                " in {}".format(last_folders(self.workdir, 2))
+                            )
+                            self.success = False
+                        else:
+                            break
             # end cefine
             # running single-point in gas phase
             self._TMSP()
@@ -3419,104 +3443,6 @@ class tm_job(qm_job):
                 "-d3",
             ],
         }
-        cef_callsupe = {
-            "b97-3c": [
-                "cefine",
-                "-chrg",
-                str(self.chrg),
-                "-uhf",
-                str(self.unpaired),
-                "-func",
-                "b973c",
-                "-bas",
-                "def2-mTZVP",
-                "-noopt",
-                "-grid",
-                " m4",
-                "-scfconv",
-                "6",
-                "-sym",
-                "c1",
-                "-novdw",
-            ],
-            "pbeh-3c": [
-                "cefine",
-                "-chrg",
-                str(self.chrg),
-                "-uhf",
-                str(self.unpaired),
-                "-func",
-                "pbeh-3c",
-                "-bas",
-                "def2-mSVP",
-                "-noopt",
-                "-grid",
-                " m4",
-                "-scfconv",
-                "6",
-                "-sym",
-                "c1",
-            ],
-            "tpss": [
-                "cefine",
-                "-chrg",
-                str(self.chrg),
-                "-uhf",
-                str(self.unpaired),
-                "-func",
-                "tpss",
-                "-fpol",
-                "-bas",
-                "def2-TZVP",
-                "-noopt",
-                "-grid",
-                " m4",
-                "-scfconv",
-                "6",
-                "-sym",
-                "c1",
-                "-d3",
-            ],
-            "pw6b95": [
-                "cefine",
-                "-chrg",
-                str(self.chrg),
-                "-uhf",
-                str(self.unpaired),
-                "-func",
-                "pw6b95",
-                "-bas",
-                str(self.basis),
-                "-noopt",
-                "-grid",
-                " m4",
-                "-scfconv",
-                "7",
-                "-sym",
-                "c1",
-                "-d3",
-                "-ri",
-            ],
-            "pbe0": [
-                "cefine",
-                "-chrg",
-                str(self.chrg),
-                "-uhf",
-                str(self.unpaired),
-                "-func",
-                "pbe0",
-                "-bas",
-                "def2-TZVP",
-                "-noopt",
-                "-grid",
-                " m4",
-                "-scfconv",
-                "6",
-                "-sym",
-                "c1",
-                "-d3",
-            ],
-        }
         cef_callsnmr = {
             "tpss": [
                 "cefine",
@@ -3555,40 +3481,61 @@ class tm_job(qm_job):
                 "-d3",
             ],
         }
-
-        if self.NMR:
-            s = subprocess.check_output(
-                cef_callsnmr[self.func],
-                shell=False,
-                stdin=None,
-                stderr=subprocess.STDOUT,
-                universal_newlines=False,
-                cwd=self.workdir,
-            )
-        elif self.unpaired > 0:
-            s = subprocess.check_output(
-                cef_callsupe[self.func],
-                shell=False,
-                stdin=None,
-                stderr=subprocess.STDOUT,
-                universal_newlines=False,
-                cwd=self.workdir,
-            )
-        elif self.unpaired == 0:
-            s = subprocess.check_output(
-                cef_calls[self.func],
-                shell=False,
-                stdin=None,
-                stderr=subprocess.STDOUT,
-                universal_newlines=False,
-                cwd=self.workdir,
-            )
-        output = s.decode("utf-8").splitlines()
-        # checkoutput for errors
-        for line in output:
-            if "define ended abnormally" in line:
-                self.success = False
-                return 1
+        for k in range(2):
+            if self.NMR:
+                s = subprocess.check_output(
+                    cef_callsnmr[self.func],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                )
+            elif self.unpaired > 0:
+                s = subprocess.check_output(
+                    cef_calls[self.func] + ["-uhf", str(self.unpaired)],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                )
+            elif self.unpaired == 0:
+                s = subprocess.check_output(
+                    cef_calls[self.func],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                )
+            time.sleep(0.15)
+            output = s.decode("utf-8").splitlines()
+            # checkoutput for errors
+            for line in output:
+                if "define ended abnormally" in line:
+                    self.success = False
+                    return 1
+            # check if wrong functional was written by cefine
+            with open(
+                os.path.join(self.workdir, "control"),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as control:
+                checkup = control.readlines()
+            for line in checkup:
+                if "functional" in line:
+                    if self.func not in line:
+                        print(
+                            "Wrong functional in control file"
+                            " in {}".format(last_folders(self.workdir, 2))
+                        )
+                        self.success = False
+                    else:
+                        self.success = True
+                        break
+        # continue with modifications to control
         solvent_dcosmors = {
             "acetone": [
                 "$cosmo",
@@ -3715,6 +3662,9 @@ class tm_job(qm_job):
             with open(
                 os.path.join(self.workdir, "control"), "w", newline=None
             ) as newcontrol:
+                for line in tmp:
+                    if "rpacor" in line:
+                        tmp[tmp.index(line)] = "$rpacor 4000 \n"
                 for line in tmp[:-1]:
                     newcontrol.write(line)
                 newcontrol.write("$ncoupling\n")
@@ -3737,8 +3687,7 @@ class tm_job(qm_job):
                     newcontrol.write('$nucsel2 "h" "c" "f" "p"\n')
                 newcontrol.write("$rpaconv 8\n")
                 newcontrol.write("$end")
-        time.sleep(0.25)
-        self.success = True
+        time.sleep(0.15)
         return 0
 
     def _sp(self):
@@ -5876,6 +5825,8 @@ class handle_input:
         "pcSseg-1",
         "pcSseg-2",
         "pcSseg-3",
+        "x2c-SVPall-s",
+        "x2c-TZVPall-s",
     )
 
     def __init__(self, solvents, gfnv, func, func3, funcJ, funcS, href, cref):
@@ -5959,7 +5910,7 @@ class handle_input:
 
     def read_ensorc_data(self, args, path, startreading):
         """ check configdata for typos"""
-        print("Reading user set defaults.")
+        print("Reading user set defaults (ensorc).")
         self._read_config(path, startreading)
         error_logical = False
         # check keys:
@@ -6019,21 +5970,18 @@ class handle_input:
         escfpath = None
         orca_old = None
         orca_new = None
+        orcaversion = None
 
         with open(path, "r") as inp:
             stor = inp.readlines()
         for line in stor:
-            # COSMO-RS set up
             if "ctd =" in line:
                 try:
                     cosmorssetup = str(line.rstrip(os.linesep))
                 except:
-                    if args.part3 == "on" and args.sm3 == "cosmors":
-                        print(
-                            "\nERROR: could not read settings for COSMO-RS from .ensorc!\nGoing to exit."
-                        )
-                        patherror_logic = True
-                # test for COSMO-RS database
+                    print(
+                        "WARNING: could not read settings for COSMO-RS from" " .ensorc!"
+                    )
                 try:
                     dbpath = os.path.join(
                         os.path.split(cosmorssetup.split()[5].strip('"'))[0],
@@ -6042,111 +5990,64 @@ class handle_input:
                     os.path.isdir(dbpath)
                 except:
                     print(
-                        "\nERROR: could not read settings for COSMO-RS from .ensorc!\nMost probably there is a user "
-                        "input error.\nGoing to exit."
+                        "WARNING: could not read settings for COSMO-RS from "
+                        ".ensorc!\nMost probably there is a user "
+                        "input error."
                     )
-                    patherror_logic = True
-            # get COSMO-RS version:
             if "cosmothermversion:" in line:
                 try:
                     cosmothermversion = int(line.split()[1])
                 except:
                     print(
-                        "cosmothermversion could not be read! This is necessary to prepare the cosmotherm.inp! "
-                        "Going to exit! \n"
+                        "WARNING: cosmothermversion could not be read! This "
+                        "is necessary to prepare the cosmotherm.inp! "
                     )
-                    patherror_logic = True
             if "ORCA:" in line:
                 try:
                     orcapath = str(line.split()[1])
                 except:
-                    if args.prog == "orca" or args.prog4 == "orca":
-                        print(
-                            "\nERROR: could not read path for ORCA from .ensorc!\nGoing to exit."
-                        )
-                        patherror_logic = True
+                    print("WARNING: could not read path for ORCA from " ".ensorc!.")
             if "ORCA version:" in line:
                 try:
-                    if float(line.split()[2]) < 4.1:
+                    tmp = line.split()[2]
+                    tmp = tmp.split(".")
+                    tmp.insert(1, ".")
+                    tmp = "".join(tmp)
+                    if float(tmp) < 4.1:
                         orca_old = True
                         orca_new = False
-                    elif float(line.split()[2]) >= 4.1:
+                    elif float(tmp) >= 4.1:
                         orca_old = False
                         orca_new = True
+                    orcaversion = tmp
                 except:
-                    if args.prog == "orca" or args.prog4 == "orca":
-                        print(
-                            "\nERROR: could not read ORCA version from .ensorc!\nGoing to exit."
-                        )
-                        patherror_logic = True
+                    print("WARNING: could not read ORCA version from " ".ensorc!")
             if "GFN-xTB:" in line:
                 try:
                     xtbpath = str(line.split()[1])
                 except:
-                    if args.rrhoprog[1] == "xtb" or args.ancopt == "on":
-                        print("\nERROR: could not read path for GFN-xTB from .ensorc!")
-                        if shutil.which("xtb") is not None:
-                            xtbpath = shutil.which("xtb")
-                            print("Going to use {} instead.".format(xtbpath))
+                    print("WARNING: could not read path for GFNn-xTB from .ensorc!")
+                    if shutil.which("xtb") is not None:
+                        xtbpath = shutil.which("xtb")
+                        print("Going to use {} instead.".format(xtbpath))
             if "CREST:" in line:
                 try:
                     crestpath = str(line.split()[1])
                 except:
-                    if args.part2 == "on":
-                        print("\nERROR: could not read path for CREST from .ensorc!")
-                        if shutil.which("crest") is not None:
-                            crestpath = shutil.which("crest")
-                            print("Going to use {} instead.".format(crestpath))
+                    print("WARNING: could not read path for CREST from .ensorc!")
+                    if shutil.which("crest") is not None:
+                        crestpath = shutil.which("crest")
+                        print("Going to use {} instead.".format(crestpath))
             if "mpshift:" in line:
                 try:
                     mpshiftpath = str(line.split()[1])
                 except:
-                    if args.part4 == "on":
-                        if args.prog4 == "tm":
-                            print(
-                                "\nERROR: could not read path for mpshift from .ensorc!\nGoing to exit."
-                            )
-                            patherror_logic = True
-                        elif not args.prog4 and args.prog == "tm":
-                            print(
-                                "\nERROR: could not read path for mpshift from .ensorc!\nGoing to exit."
-                            )
-                            patherror_logic = True
+                    print("ẂARNING: could not read path for mpshift from " ".ensorc!")
             if "escf:" in line:
                 try:
                     escfpath = str(line.split()[1])
                 except:
-                    if args.part4 == "on":
-                        if args.prog4 == "tm":
-                            print(
-                                "\nERROR: could not read path for escf from .ensorc!\nGoing to exit."
-                            )
-                            patherror_logic = True
-                        elif not args.prog4 and args.prog == "tm":
-                            print(
-                                "\nERROR: could not read path for esct from .ensorc!\nGoing to exit."
-                            )
-                            patherror_logic = True
-
-        for path in list(
-            [
-                dbpath,
-                cosmothermversion,
-                cosmorssetup,
-                orcapath,
-                crestpath,
-                xtbpath,
-                mpshiftpath,
-                escfpath,
-                orca_old,
-                orca_new,
-            ]
-        ):
-            if path is None:
-                patherror_logic = True
-        if patherror_logic:
-            print("Errors in program path-setup! Going to exit!")
-            sys.exit(1)
+                    print("WARNING: could not read path for escf from " ".ensorc!")
         return (
             dbpath,
             cosmothermversion,
@@ -6158,6 +6059,7 @@ class handle_input:
             escfpath,
             orca_old,
             orca_new,
+            orcaversion,
         )
 
     def write_ensorc(self):
@@ -6170,7 +6072,7 @@ class handle_input:
             with open("ensorc-new", "w", newline=None) as outdata:
                 outdata.write(".ENSORC\n")
                 outdata.write("\n")
-                outdata.write("ORCA: /path/including/binary/orca-binary\n")
+                outdata.write("ORCA: /path/excluding/binary/\n")
                 outdata.write("ORCA version: 4.1\n")
                 outdata.write("GFN-xTB: /path/including/binary/xtb-binary\n")
                 outdata.write("CREST: /path/including/binary/crest-binary\n")
@@ -6594,11 +6496,11 @@ class handle_input:
         if diff:
             print(
                 "WARNING: These keywords were not found in the configuration "
-                "file flags.dat\n        and therefore default "
+                "file flags.dat\n         and therefore default "
                 "values are taken for:"
             )
             for item in diff:
-                print(item)
+                print("         {}".format(item))
                 self.configdata[item] = self.enso_internal_defaults[item]
         if "part1" in self.configdata:
             if self.configdata["part1"] in ["on", "off"]:
@@ -7373,6 +7275,10 @@ def rrho_part23(
                 for line in rmsd:
                     if line[1] > 0.4:
                         print("{:8} {:.3f}\n".format(line[0], line[1]))
+                        save_errors.append(
+                            "WARNING: Large RMSD between DFT and "
+                            "GFNn-xTB geometry for {}.".format(line[0])
+                        )
     # adding conformers calculated before to results
     try:
         length = max([len(str(i.name)) for i in tmp_results])
@@ -7392,7 +7298,7 @@ def rrho_part23(
         print("ERROR: No conformers left!")
         write_json("save_and_exit", json_dict, jsonfile)
 
-    return results
+    return results, save_errors
 
 
 def additive_gsolv(
@@ -7653,7 +7559,7 @@ def enso_startup(cwd):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 1.26                   |
+    |                   version 1.27                   |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|"""
@@ -7683,6 +7589,7 @@ def enso_startup(cwd):
             ensorc = ""
 
     orcapath = ""
+    orcaversion = ""
     xtbpath = "xtb"
     crestpath = "crest"
     mpshiftpath = ""
@@ -7708,8 +7615,8 @@ def enso_startup(cwd):
         ensorcsettings.write_ensorc()
         print(
             "A new ensorc was written into the current directory!\n"
-            "You have to adjust the settings to your needs and it is mandatory to correctly "
-            "set the program paths!"
+            "You have to adjust the settings to your needs and it is"
+            " mandatory to correctly set the program paths!"
         )
         print("All done!")
         sys.exit(0)
@@ -7736,14 +7643,16 @@ def enso_startup(cwd):
             escfpath,
             orca_old,
             orca_new,
+            orcaversion,
         ) = ensorcsettings.read_program_paths(ensorc)
         print("\nThe following pathways were read in:")
-        print("    ORCA:    {}".format(orcapath))
-        # print('    TURBOMOLE: {}'.format(tmpath))
-        print("    GFN-xTB: {}".format(xtbpath))
-        print("    CREST:   {}".format(crestpath))
-        print("    mpshift: {}".format(mpshiftpath))
-        print("    escf:    {}".format(escfpath))
+        print("    ORCA:         {}".format(orcapath))
+        print("    ORCA Version: {}".format(orcaversion))
+        # print('    TURBOMOLE:  {}'.format(tmpath))
+        print("    GFN-xTB:      {}".format(xtbpath))
+        print("    CREST:        {}".format(crestpath))
+        print("    mpshift:      {}".format(mpshiftpath))
+        print("    escf:         {}".format(escfpath))
         try:
             tmp = cosmorssetup.split()
             if len(tmp) == 9:
@@ -7767,7 +7676,7 @@ def enso_startup(cwd):
 
     # Write flags.dat or run program
     if not args.run and not args.checkinput:
-        print("\nWriting data to flags.dat.\n")
+        print("\nWriting data to flags.dat.")
         ensorcsettings.write_flags(
             args,
             impsolvents,
@@ -7813,7 +7722,7 @@ def enso_startup(cwd):
         conformersxyz = os.path.join(cwd, "crest_conformers.xyz")
         print("\nUsing conformers from file crest_conformers.xyz.")
     else:
-        print("\nERROR: Could not find crest_conformers.xyz file! \nGoing to exit.")
+        print("\nERROR: Could not find crest_conformers.xyz file!" "\nGoing to exit.")
         sys.exit(1)
 
     # get nstruc and nat from conformersxyz
@@ -7821,15 +7730,14 @@ def enso_startup(cwd):
         with open(conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
             stringfile_lines = xyzfile.readlines()
     except:
-        print("\nERROR: Can not read file {}! \nGoing to exit.".format(conformersxyz))
+        print("\nERROR: Can not read file {}!" "\nGoing to exit.".format(conformersxyz))
         sys.exit(1)
     try:
         nat = int(stringfile_lines[0])
     except ValueError:
         print(
-            "Could not get the number of atoms from file {}, something is wrong!".format(
-                conformersxyz
-            )
+            "Could not get the number of atoms from file {}, something "
+            "is wrong!".format(conformersxyz)
         )
         sys.exit(1)
     try:
@@ -7844,11 +7752,17 @@ def enso_startup(cwd):
         args.nstruc = nelements
     if args.nstruc > nelements:
         print(
-            "WARNING: the chosen number of conformers is larger than the number of conformers of the"
-            "crest_conformers.xyz file! \nOnly the conformers in the crest_conformers.xyz file are used."
+            "WARNING: the chosen number of conformers is larger than the number"
+            " of conformers of the crest_conformers.xyz file! \nOnly the "
+            "conformers in the crest_conformers.xyz file are used."
         )
         args.nstruc = nelements
-    # check if cefine is to be found!
+    if crestpath is None:
+        print("\nERROR: path for CREST is not correct!")
+        error_logical = True
+    elif shutil.which(crestpath) is None:
+        print("\nERROR: path for CREST is not correct!")
+        error_logical = True
     if (
         args.prog == "tm"
         or args.prog4 == "tm"
@@ -7860,43 +7774,54 @@ def enso_startup(cwd):
         else:
             print("\nERROR: cefine has not been found!")
             error_logical = True
-    # check if ORCA path is correct
     if args.prog == "orca" or args.prog3 == "orca" or args.prog4 == "orca":
-        if shutil.which(os.path.join(orcapath, "orca")) is None:
-            print("ERROR: path for ORCA is not correct!")
+        if orcapath is None:
+            print("\nERROR: path for ORCA is not correct!")
             error_logical = True
-        if orca_new is False and orca_old is False:
-            print("ERROR: ORCA version was not found!")
+        elif shutil.which(os.path.join(orcapath, "orca")) is None:
+            print("\nERROR: path for ORCA is not correct!")
             error_logical = True
-    # check if GFN-xTB path is correct
+        if orca_new is None or orca_old is None:
+            print("\nERROR: ORCA version was not found!")
+            error_logical = True
+        elif orca_new is False and orca_old is False:
+            print("\nERROR: ORCA version was not found!")
+            error_logical = True
     if args.rrhoprog == "xtb" or args.ancopt == "on":
-        if shutil.which(xtbpath) is None:
-            print("ERROR: path for GFN-xTB is not correct!")
+        if xtbpath is None:
+            print("\nERROR: path for xTB is not correct!")
             error_logical = True
-    # check if escf path is correct
+        elif shutil.which(xtbpath) is None:
+            print("\nERROR: path for xTB is not correct!")
+            error_logical = True
     if args.part4 == "on" and args.calcJ == "on":
         if args.prog4 == "tm" or (args.prog == "tm" and args.prog4 == "prog"):
-            if shutil.which(escfpath) is None:
-                print("ERROR: path for escf is not correct!")
+            if escfpath is None:
+                print("\nERROR: path for escf is not correct!")
                 error_logical = True
-    # check if mpshift path is correct
+            elif shutil.which(escfpath) is None:
+                print("\nERROR: path for escf is not correct!")
+                error_logical = True
     if args.part4 == "on" and args.calcS == "on":
         if args.prog4 == "tm" or (args.prog == "tm" and args.prog4 == "prog"):
-            if shutil.which(mpshiftpath) is None:
-                print("ERROR: path for mpshift is not correct!")
+            if mpshiftpath is None:
+                print("\nERROR: path for mpshift is not correct!")
+                error_logical = True
+            elif shutil.which(mpshiftpath) is None:
+                print("\nERROR: path for mpshift is not correct!")
                 error_logical = True
     if args.gsolv2 == "cosmors" or args.sm3 == "cosmors":
         if cosmorssetup is None:
-            print("ERROR: Set up for COSMO-RS has to be written to .ensorc!")
+            print("\nERROR: Set up for COSMO-RS has to be written to .ensorc!")
             error_logical = True
         if cosmothermversion is None:
-            print("ERROR: Version of COSMO-RS has to be written to .ensorc!")
+            print("\nERROR: Version of COSMO-RS has to be written to .ensorc!")
             error_logical = True
         home = expanduser("~")
         if shutil.which("cosmotherm") is not None:
-            print("using COSMOtherm from {}".format(shutil.which("cosmotherm")))
+            print("Using COSMOtherm from {}".format(shutil.which("cosmotherm")))
         else:
-            print("ERROR: COSMOtherm has not been found!")
+            print("\nERROR: COSMOtherm has not been found!")
             error_logical = True
     settings = os.environ
     if (
@@ -7912,23 +7837,23 @@ def enso_startup(cwd):
                 try:
                     settings["PARNODES"] = str(args.omp)
                     print(
-                        "PARNODES for TM or COSMO-RS calculation was set to {}".format(
-                            settings["PARNODES"]
-                        )
+                        "PARNODES for TM or COSMO-RS calculation was set "
+                        "to {}".format(settings["PARNODES"])
                     )
                 except:
-                    print("\nERROR: PARNODES can not be changed! \nGoing to exit!")
+                    print("\nERROR: PARNODES can not be changed!")
                     error_logical = True
             else:
                 print(
-                    "\nERROR: PARA_ARCH has to be set to SMP for parallel TM calculations! \nGoing to exit."
+                    "\nERROR: PARA_ARCH has to be set to SMP for parallel TM "
+                    "calculations!"
                 )
                 if args.run:
                     error_logical = True
         except:
             print(
-                "\nERROR: PARA_ARCH has to be set to SMP and PARNODES have to be set"
-                "         for parallel TM calculations! \nGoing to exit."
+                "\nERROR: PARA_ARCH has to be set to SMP and PARNODES have to "
+                "be set\n       for parallel TM calculations!."
             )
             if args.run:
                 error_logical = True
@@ -7937,16 +7862,20 @@ def enso_startup(cwd):
         if args.part4 == "on" and args.calcJ == "off" and args.calcS == "off":
             args.part4 = "off"
             print(
-                "WARNING: Neither calculating coupling nor shielding constants is activated! Part 4 is not executed."
+                "WARNING: Neither calculating coupling nor shielding "
+                "constants is activated! Part 4 is not executed."
             )
         elif len(spectrumlist) == 0:
             if args.part4 == "on":
                 print(
-                    "WARNING: No type of NMR spectrum is activated in the .ensorc! Part 4 is not executed."
+                    "WARNING: No type of NMR spectrum is activated in the "
+                    ".ensorc! Part 4 is not executed."
                 )
                 args.part4 = "off"
             else:
-                print("WARNING: No type of NMR spectrum is activated in the .ensorc!")
+                print(
+                    "WARNING: No type of NMR spectrum is activated in " "the .ensorc!"
+                )
         else:
             args.fref = "CFCl3"
             if args.solv is None or args.solv == "toluene":
@@ -7955,7 +7884,7 @@ def enso_startup(cwd):
                 args.pref = "TMP"
 
     if error_logical and not args.debug:
-        print("ERROR: ENSO can not continue due to input errors!\nGoing to exit!")
+        print("\nERROR: ENSO can not continue due to input errors!" "\nGoing to exit!")
         sys.exit(1)
 
     # print parameter setting
@@ -8276,7 +8205,8 @@ def enso_startup(cwd):
     json_dict, firstrun = read_json(args.nstruc, cwd, jsonfile, args)
     if args.checkinput:
         print(
-            "Input check is finished. The ENSO program can be executed with the flag -run.\n"
+            "Input check is finished. The ENSO program can be executed with "
+            "the flag -run.\n"
         )
         sys.exit(0)
 
@@ -8441,7 +8371,8 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
             for conf in list(results):
                 if not conf.success:
                     print(
-                        "\nERROR: A problem has occurred in the preparation of the optimization of {}! The "
+                        "\nERROR: A problem has occurred in the preparation of "
+                        "the optimization of {}! The "
                         "conformer is removed.\n".format(conf.name)
                     )
                     json_dict[conf.name]["crude_opt"] = "failed"
@@ -8485,17 +8416,15 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
             for conf in list(results):
                 if not conf.success:
                     print(
-                        "\nERROR: A problem has occurred in the optimization of {}! The conformer is removed.\n".format(
-                            conf.name
-                        )
+                        "\nERROR: A problem has occurred in the optimization "
+                        "of {}! The conformer is removed.\n".format(conf.name)
                     )
                     json_dict[conf.name]["crude_opt"] = "failed"
                     json_dict[conf.name]["consider_for_part2"] = False
                     json_dict[conf.name]["backup_for_part2"] = False
                     save_errors.append(
-                        "Conformer {} was removed, because the optimization failed!".format(
-                            conf.name
-                        )
+                        "Conformer {} was removed, because the optimization "
+                        "failed!".format(conf.name)
                     )
                     results.remove(conf)
             # update json_dict
@@ -8553,12 +8482,7 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 min([i.xtb_energy for i in results if i.xtb_energy is not None])
             )
 
-        if len(results) == 1 or len(
-            [i.energy for i in results if i.energy is not None]
-        ) in [0, 1]:
-            mindft = 0.0
-        else:
-            mindft = float(min([i.energy for i in results if i.energy is not None]))
+        mindft = float(min([i.energy for i in results if i.energy is not None]))
 
         for i in results:
             try:
@@ -8567,9 +8491,8 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 )
             except:
                 print(
-                    "Problem with GFN-xTB energy read in from {} for {}, relative energy is set to 0.00.".format(
-                        conformersxyz, i.name
-                    )
+                    "Problem with GFN-xTB energy read in from {} for {},"
+                    " relative energy is set to 0.00.".format(conformersxyz, i.name)
                 )
                 i.xtb_energy = 0.00
                 i.rel_xtb_energy = 0.00
@@ -8579,16 +8502,14 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 )
             except:
                 print(
-                    "\nERROR: A problem has occurred in the optimization of {}! The conformer is removed.\n".format(
-                        i.name
-                    )
+                    "\nERROR: A problem has occurred in the optimization of {}!"
+                    " The conformer is removed.\n".format(i.name)
                 )
                 json_dict[i.name]["crude_opt"] = "failed"
                 json_dict[i.name]["energy_crude_opt"] = None
                 save_errors.append(
-                    "Conformer {} was removed, because the optimization failed!".format(
-                        i.name
-                    )
+                    "Conformer {} was removed, because the optimization "
+                    "failed!".format(i.name)
                 )
                 results.remove(i)
 
@@ -8602,30 +8523,49 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 )
             else:
                 print(
-                    "ERROR: The maximal relative DFT energy could not be calculated! Going to exit!"
+                    "ERROR: The maximal relative DFT energy could not be "
+                    "calculated! Going to exit!"
                 )
                 write_json("save_and_exit", json_dict, jsonfile)
 
         print("\n*********************************")
         print("* {:^29} *".format("energies of part 1"))
         print("*********************************")
+        try:
+            length = max([len(str(i.name)) for i in results])
+        except ValueError:
+            length = 4 + int(args.nstruc)
         print(
-            "CONF#     E(GFN-xTB)    Erel(GFN-xTB)     E({})   Erel({})".format(
-                args.func, args.func
+            "{:{digits}}     E(GFN-xTB)    Erel(GFN-xTB)   E({})     Erel({})".format(
+                "CONF#", args.func, args.func, digits=length
             )
         )
-        print("          [Eh]          [kcal/mol]        [Eh]          [kcal/mol]")
+        print(
+            "{:{digits}}     [Eh]          [kcal/mol]      [Eh]           [kcal/mol]".format(
+                "", digits=length
+            )
+        )
         for i in results:
             if i.rel_energy != 0.00:
                 print(
-                    "{:8} {:.7f}      {:^5.2f}         {:.7f}      {:^5.2f}".format(
-                        i.name, i.xtb_energy, i.rel_xtb_energy, i.energy, i.rel_energy
+                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}".format(
+                        i.name,
+                        i.xtb_energy,
+                        i.rel_xtb_energy,
+                        i.energy,
+                        i.rel_energy,
+                        digits=length,
                     )
                 )
             else:
                 print(
-                    "{:8} {:.7f}      {:^5.2f}         {:.7f}      {:^5.2f}  <----- lowest".format(
-                        i.name, i.xtb_energy, i.rel_xtb_energy, i.energy, i.rel_energy
+                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}  <----- lowest".format(
+                        i.name,
+                        i.xtb_energy,
+                        i.rel_xtb_energy,
+                        i.energy,
+                        i.rel_energy,
+                        digits=length,
                     )
                 )
 
@@ -8654,7 +8594,8 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
             print_block(tmp_consider)
         else:
             print(
-                "\nAll relative energies are below the initial threshold of {} kcal/mol.\nAll conformers are "
+                "\nAll relative energies are below the initial threshold of {} "
+                "kcal/mol.\nAll conformers are "
                 "considered further.".format(str(args.thr1))
             )
             for i in list(results):
@@ -8773,8 +8714,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     # this conformer was already calculated, but the calculation failed,
                     # remove from results
                     print(
-                        "The calculation of part 2 failed for {} in the previous run. The "
-                        "conformer is sorted out.".format(item.name)
+                        "The calculation of part 2 failed for {} in the previous"
+                        " run. The conformer is sorted out.".format(item.name)
                     )
                     results.remove(item)
                 elif json_dict[item.name]["opt"] == "not_calculated":
@@ -8823,10 +8764,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         elif json_dict[item]["opt"] == "failed":
                             # this conformer was calculated before and the calculation failed
                             print(
-                                "Though {} is declared as backup conformer, the calculation of part2 was performed "
-                                "before and failed. The conformer is sorted out.".format(
-                                    item
-                                )
+                                "Though {} is declared as backup conformer, the "
+                                "calculation of part2 was performed before and "
+                                "failed. The conformer is sorted out.".format(item)
                             )
                         else:
                             # this conformer was already calculated successfully, create tmp_results item
@@ -8966,7 +8906,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 for i in list(results):
                     if not i.success:
                         print(
-                            "\nERROR: A problem has occurred in the optimization preparation of {}! The conformer "
+                            "\nERROR: A problem has occurred in the optimization "
+                            "preparation of {}! The conformer "
                             "is removed.\n".format(i.name)
                         )
                         json_dict[i.name]["opt"] = "failed"
@@ -9021,8 +8962,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             for i in list(results):
                 if not i.success:
                     print(
-                        "\nERROR: A problem has occurred in the optimization of {}! The conformer is "
-                        "removed.\n".format(i.name)
+                        "\nERROR: A problem has occurred in the optimization of "
+                        "{}! The conformer is removed.\n".format(i.name)
                     )
                     json_dict[i.name]["opt"] = "failed"
                     json_dict[i.name]["consider_for_part3"] = False
@@ -9073,9 +9014,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             # optimized in implicit solvent therefore gas phase single-point needed for free energy with COSMO-RS
             print("\nGSOLV")
             print(
-                "Gas Phase Single-point at {} level,\n(to be used in combination with the solvation correction).".format(
-                    args.func
-                )
+                "Gas Phase Single-point at {} level,\n(to be used in combination"
+                " with the solvation correction).".format(args.func)
             )
             tmp_results = []
             for i in list(results):
@@ -9086,7 +9026,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 elif json_dict[i.name]["sp_part2"] == "failed":
                     # this conformer was already calculated but the calculation failed, remove this conformer
                     print(
-                        "The calculation of part 1 failed for {} in the previous run. The conformer is sorted "
+                        "The calculation of part 1 failed for {} in the previous"
+                        " run. The conformer is sorted "
                         "out.".format(i.name)
                     )
                     results.remove(i)
@@ -9102,9 +9043,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             )
             if len(tmp_results) > 0:
                 print(
-                    "The gas phase single-point was already calculated for {} conformers:".format(
-                        str(len(tmp_results))
-                    )
+                    "The gas phase single-point was already calculated for {} "
+                    "conformers:".format(str(len(tmp_results)))
                 )
                 print_block([i.name for i in tmp_results])
                 if len(results) > 0:
@@ -9147,7 +9087,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 for i in list(results):
                     if not i.success:
                         print(
-                            "\nERROR: A problem has occurred in the gas phase single-point of {}! The conformer is "
+                            "\nERROR: A problem has occurred in the gas phase "
+                            "single-point of {}! The conformer is "
                             "removed.\n".format(i.name)
                         )
                         json_dict[i.name]["opt"] = "failed"
@@ -9155,8 +9096,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         json_dict[i.name]["backup_for_part3"] = False
                         json_dict[i.name]["energy_opt"] = None
                         save_errors.append(
-                            "Conformer {} was removed, because preparation of gas phase single-point "
-                            "failed (because of COSMO-RS)!".format(i.name)
+                            "Conformer {} was removed, because preparation of gas"
+                            " phase single-point failed (because of COSMO-RS"
+                            ")!".format(i.name)
                         )
                         results.remove(i)
 
@@ -9207,7 +9149,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 for i in list(results):
                     if not i.success:
                         print(
-                            "\nERROR: A problem has occurred in the single-point calculation of {}! The conformer is "
+                            "\nERROR: A problem has occurred in the single-point "
+                            "calculation of {}! The conformer is "
                             "removed.\n".format(i.name)
                         )
                         json_dict[i.name]["sp_part2"] = "failed"
@@ -9274,7 +9217,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             print("Since calculation is in the gas phase, Gsolv is not required.")
 
         # run RRHO
-        results = rrho_part23(
+        results, save_errors = rrho_part23(
             args,
             q,
             resultq,
@@ -9340,7 +9283,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     )
                 except ValueError:
                     print(
-                        "Could not calculate relative free energy for conformer {}. rel free energy is set to a "
+                        "Could not calculate relative free energy for conformer "
+                        "{}. rel free energy is set to a "
                         "very high number!".format(item.name)
                     )
                     item.rel_free_energy = 1000.00
@@ -9956,7 +9900,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
 
                 #
                 # run RRHO
-                results = rrho_part23(
+                results, save_errors = rrho_part23(
                     args,
                     q,
                     resultq,
