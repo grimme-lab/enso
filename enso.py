@@ -7563,7 +7563,7 @@ def enso_startup(cwd):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 1.27                   |
+    |                   version 1.271                  |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|"""
