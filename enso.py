@@ -3526,7 +3526,11 @@ class tm_job(qm_job):
                 checkup = control.readlines()
             for line in checkup:
                 if "functional" in line:
-                    if self.func not in line:
+                    if self.func == 'b97-3c':
+                        testfunc = 'b973c'
+                    else:
+                        testfunc = self.func
+                    if testfunc not in line:
                         print(
                             "Wrong functional in control file"
                             " in {}".format(last_folders(self.workdir, 2))
