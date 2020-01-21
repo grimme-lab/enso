@@ -847,14 +847,12 @@ def read_json(nstruc, cwd, jsonfile, args):
                 or json_dict["flags"]["basis3"] != flags_dict["basis3"]
                 or json_dict["flags"]["sm3"] != flags_dict["sm3"]
             ):
-                if json_dict["flags"]["sm3"] in ("cosmors, gbsa_gsolv") and flags_dict[
-                    "sm3"
-                ] in ("cosmors, gbsa_gsolv"):
+                if json_dict["flags"]["sm3"] in ("cosmors", "gbsa_gsolv") and flags_dict["sm3"] in ("cosmors", "gbsa_gsolv"):
                     # dont recalculate SP
                     pass
                 else:
                     print(
-                        "WARNING: The density functional, the basis set and/or"
+                        "WARNING: The density functional / the basis set and/or"
                         " the solvent model for part 3 was changed \n"
                         "         with respect to the previous run. The "
                         "single-point of part 3 is reset to not_calculated"
@@ -1160,7 +1158,7 @@ def write_trj(results, outpath, optfolder):
         with open(outpath, "a", encoding=coding, newline=None) as out:
             for i in results:
                 out.write("  {}\n".format(nat))  ### number of atoms
-                out.write("{:20.8f}        !{}\n".format(i.energy, i.name))  ### energy
+                out.write("E= {:20.8f}  G= {:20.8f}      !{}\n".format(i.energy, i.free_energy, i.name))  ### energy
                 conf_xyz = coord2xyz(
                     os.path.join(cwd, i.name, optfolder)
                 )  ### coordinates in xyz
@@ -2564,6 +2562,7 @@ class qm_job:
     pactive = False
     factive = False
     symmetry = "C1"
+    omp = 1
 
     def execute(self):
         pass
@@ -3355,6 +3354,10 @@ class qm_job:
 class tm_job(qm_job):
     def cefine(self):
         """Do cefine for func"""
+        removegf=False
+        if self.basis == 'def2-QZVP(-gf)':
+            self.basis = 'def2-QZVP'
+            removegf=True
         cef_calls = {
             "b97-3c": [
                 "cefine",
@@ -3481,6 +3484,9 @@ class tm_job(qm_job):
                 "-d3",
             ],
         }
+        # remove -fg functions from def2-QZVP basis set
+        if removegf:
+            cef_calls[self.func] =  cef_calls[self.func] + ["-gf"]
         for k in range(2):
             if self.NMR:
                 s = subprocess.check_output(
@@ -3526,7 +3532,11 @@ class tm_job(qm_job):
                 checkup = control.readlines()
             for line in checkup:
                 if "functional" in line:
-                    if self.func not in line:
+                    if self.func == 'b97-3c':
+                        testfunc = 'b973c'
+                    else:
+                        testfunc = self.func
+                    if testfunc not in line:
                         print(
                             "Wrong functional in control file"
                             " in {}".format(last_folders(self.workdir, 2))
@@ -3633,7 +3643,7 @@ class tm_job(qm_job):
                 os.path.join(self.workdir, "control"), "w", newline=None
             ) as newcontrol:
                 for line in tmp[:-1]:  # change thresholds if DCOSMO-RS is used
-                    newcontrol.write(line + " \n")
+                    newcontrol.write(line)
                 if self.sm == "dcosmors":
                     for line in solvent_dcosmors[self.solv]:
                         newcontrol.write(line + " \n")
@@ -4412,9 +4422,9 @@ class orca_job(qm_job):
                 for line in osp_calls[self.func]:
                     inp.write(line + "\n")
                 # nprocs
-                if int(args.omp) >= 1:
+                if int(self.omp) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.omp))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
@@ -4573,9 +4583,9 @@ class orca_job(qm_job):
                 # if not self.full:
                 #    inp.write('%geom\n    TolE 5e-4\n    TolRMSG 1e-2\n    TolMaxG ??\n    TolRMSD ??\n    TolMaxD 1.0\nend\n')
                 # nprocROR: in the optimization of
-                if int(args.omp) >= 1:
+                if int(self.omp) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.omp))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
@@ -4770,9 +4780,9 @@ class orca_job(qm_job):
                 else:
                     for line in thresholds["crude"]:
                         inp.write(line + "\n")
-                if int(args.omp) >= 1:
+                if int(self.omp) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.omp))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
@@ -4930,9 +4940,9 @@ class orca_job(qm_job):
                     for line in ofreq_calls[self.func]:
                         inp.write(line + "\n")
                 # nprocs
-                if int(args.omp) >= 1:
+                if int(self.omp) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.omp))
                     inp.write("end\n")
                 # unpaired, charge, and coordinates
                 inp.write(
@@ -5076,9 +5086,9 @@ class orca_job(qm_job):
                 inp.write("end\n")
                 inp.write("end\n")
             # nprocs
-            if int(args.omp) >= 1:
+            if int(self.omp) >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(args.omp))
+                inp.write("    nprocs {}\n".format(self.omp))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
@@ -5206,9 +5216,9 @@ class orca_job(qm_job):
             for line in nmrs_calls[self.func]:
                 inp.write(line + "\n")
             # nprocs
-            if args.omp >= 1:
+            if self.omp >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(args.omp))
+                inp.write("    nprocs {}\n".format(self.omp))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
@@ -5883,17 +5893,22 @@ class handle_input:
         """ remove any comments from file before parsing with csv.DictReader"""
         for row in csvfile:
             raw = row.split("#")[0].strip()
-            if raw:
-                yield raw
+            raw2 = raw.split("$")[0].strip()
+            if raw2:
+                yield raw2
         return
 
     def _read_config(self, path, test):
-        """ Read from config data from file"""
+        """ Read from config data from file (here flags.dat or .ensorc"""
         configdata = {}
         with open(path, "r") as csvfile:
             # skip header:
-            while not csvfile.readline().startswith(test):
-                pass
+            while True:
+                line = csvfile.readline()
+                if line.startswith(test) or line.startswith("$"):
+                    break
+                else:
+                    pass
             reader = csv.DictReader(
                 self._decomment(csvfile),
                 fieldnames=("key", "value"),
@@ -6087,6 +6102,7 @@ class handle_input:
                 )
                 outdata.write("cosmothermversion: 16\n")
                 outdata.write("\n")
+                outdata.write("$ENDPROGRAMS\n\n")
                 outdata.write("#NMR data\n")
                 for item in self.enso_internal_defaults:
                     keylen = len(item)
@@ -7202,6 +7218,7 @@ def rrho_part23(
             "func": args.func,
             "solv": args.solv,
             "boltzmann": args.boltzmann,
+            "omp": args.omp,
         }
         if args.rrhoprog == "xtb":
             instructrrho["jobtype"] = "rrhoxtb"
@@ -7433,6 +7450,7 @@ def additive_gsolv(
                 "solv": args.solv,
                 "cosmorssetup": cosmorssetup,
                 "boltzmann": args.boltzmann,
+                "omp": args.omp,
             }
         elif js_smodel == "gbsa_gsolv":
             instructsolv = {
@@ -7442,6 +7460,7 @@ def additive_gsolv(
                 "solv": args.solv,
                 "gfnv": args.gfnv,
                 "boltzmann": args.boltzmann,
+                "omp": args.omp,
             }
         results = run_in_parallel(
             q, resultq, job, maxthreads, results, instructsolv, folder
@@ -7559,7 +7578,7 @@ def enso_startup(cwd):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 1.27                   |
+    |                   version 1.272                  |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|"""
@@ -8204,6 +8223,7 @@ def enso_startup(cwd):
     jsonfile = "enso.json"
     json_dict, firstrun = read_json(args.nstruc, cwd, jsonfile, args)
     if args.checkinput:
+        write_json("save", json_dict, jsonfile)
         print(
             "Input check is finished. The ENSO program can be executed with "
             "the flag -run.\n"
@@ -8363,6 +8383,7 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "func": args.func,
                 "solv": args.solv,
                 "sm": args.sm,
+                "omp": args.omp,
             }
             results = run_in_parallel(
                 q, resultq, job, maxthreads, directories, instructprep, args.func
@@ -8402,6 +8423,7 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": False,
+                "omp": args.omp
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
@@ -8545,8 +8567,9 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "", digits=length
             )
         )
+        lowestenergy = min([item.energy for item in results if item.energy is not None])
         for i in results:
-            if i.rel_energy != 0.00:
+            if i.energy != lowestenergy:
                 print(
                     "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}".format(
                         i.name,
@@ -8897,6 +8920,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": args.sm,
+                    "omp": args.omp,
                 }
 
                 results = run_in_parallel(
@@ -8938,6 +8962,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": True,
+                "omp": args.omp,
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
@@ -9078,6 +9103,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "omp": args.omp
                 }
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructprep, args.func
@@ -9129,6 +9155,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "omp": args.omp
                 }
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructsp, args.func
@@ -9242,8 +9269,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             else:
                 # something went wrong and we do not know what, so reset everything
                 print(
-                    "The conformer {} was removed because the free energy could not be calculated!"
-                    "{}: energy: {}, rrho: {}, gsolv: {}.".format(
+                    "The conformer {} was removed because the free energy could "
+                    "not be calculated! {}: energy: {}, rrho: {}, gsolv: {}.".format(
                         i.name, i.name, i.energy, i.rrho, i.gsolv
                     )
                 )
@@ -9306,8 +9333,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 "CONF#", "E [Eh]", digits=length
             )
         )
+        lowestfree = min([item.free_energy for item in results if item.free_energy is not None])
         for i in results:
-            if i.rel_free_energy != 0.00:
+            if i.free_energy != lowestfree:
                 print(
                     "{:{digits}}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
                         i.name,
@@ -9761,6 +9789,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "sm": "gas",
                         "boltzmann": args.boltzmann,
+                        "omp": args.omp,
                     }
                     if args.sm3 == "smd" and args.solv:
                         instructprep["sm"] = "smd"  # solvation consider during SP
@@ -9810,6 +9839,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "basis": args.basis3,
                         "boltzmann": args.boltzmann,
+                        "omp": args.omp,
                     }
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, args.func3
@@ -9989,8 +10019,9 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             print(
                 "CONF#          E [Eh]       Gsolv [Eh]   RRHO [Eh]    Gtot [Eh]    rel. Gtot [kcal/mol]]\n"
             )
+            lowestfree = min([item.free_energy for item in results if item.free_energy is not None])
             for i in results:
-                if i.rel_free_energy != 0.00:
+                if i.free_energy != lowestfree:
                     print(
                         "{:10}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
                             i.name,
@@ -10117,15 +10148,11 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
         move_recursively(cwd, "anmr_enso")
         write_anmr_enso(cwd, results)
 
-        # write trj-part3.xyz
-        if os.path.isfile(os.path.join(cwd, "trj-part3.xyz")):
-            shutil.move(
-                os.path.join(cwd, "trj-part3.xyz"), os.path.join(cwd, "trj-part3.1")
-            )
-        move_recursively(cwd, "trj-part3")
+        # write populated confs from part3
+        move_recursively(cwd, "populated-conf-part3.xyz")
         write_trj(
             sorted(results, key=lambda x: float(x.free_energy)),
-            "trj-part3.xyz",
+            "populated-conf-part3.xyz",
             args.func,
         )
 
@@ -10494,6 +10521,7 @@ def part4(
                         "solv": args.solv,
                         "sm": args.sm4,
                         "NMR": True,
+                        "omp": args.omp,
                     }
                     if args.hactive == "on":
                         instructprep["hactive"] = True
@@ -10545,6 +10573,7 @@ def part4(
                         "func": args.funcJ,
                         "solv": args.solv,
                         "basis": args.basisJ,
+                        "omp": args.omp,
                     }
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, "NMR"
@@ -10609,6 +10638,7 @@ def part4(
                     "basis": args.basisJ,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "omp": args.omp,
                 }
                 if args.hactive == "on":
                     instructJ["hactive"] = True
@@ -10829,6 +10859,7 @@ def part4(
                             "solv": args.solv,
                             "sm": args.sm4,
                             "NMR": True,
+                            "omp": args.omp,
                         }
                         if args.hactive == "on":
                             instructprep["hactive"] = True
@@ -10883,6 +10914,8 @@ def part4(
                             "func": args.funcS,
                             "solv": args.solv,
                             "basis": args.basisS,
+                            "omp": args.omp,
+
                         }
                         results = run_in_parallel(
                             q, resultq, job, maxthreads, results, instructsp, "NMR"
@@ -10947,6 +10980,7 @@ def part4(
                     "basis": args.basisS,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "omp": args.omp,
                 }
                 if args.hactive == "on":
                     instructS["hactive"] = True
