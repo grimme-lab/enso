@@ -5752,7 +5752,7 @@ class handle_input:
         "sm3": "default",
         "sm4": "default",
         "check": "on",
-        "crestcheck": "on",
+        "crestcheck": "off",
         "maxthreads": "1",
         "omp": "1",
         "smgsolv2": "cosmors",
