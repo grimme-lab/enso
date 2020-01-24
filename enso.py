@@ -1064,7 +1064,7 @@ def crest_routine(results, func, crestcheck, json_dict):
             universal_newlines=False,
             cwd=dirp,
             stdout=outputfile,
-            env=settings,
+            env=environsettings,
         )
     time.sleep(0.05)
     ### read in crest results
@@ -1265,7 +1265,7 @@ def RMSD_subprocess(workdir):
             universal_newlines=False,
             cwd=workdir,
             stdout=outputfile,
-            env=settings,
+            env=environsettings,
         )
     with open(os.path.join(workdir, "rmsd"), "r", encoding=coding, newline=None) as out:
         stor = out.readlines()
@@ -2402,7 +2402,7 @@ def writing_anmrrc(
         cshielding = c_orca_shieldings[func][funcS][cref][solv][0]
         if orca_old:
             fshielding = f_orca_shieldings_old[func][funcS][fref][solv][0]
-        elif orca_new:
+        else:
             fshielding = f_orca_shieldings_new[func][funcS][fref][solv][0]
         pshielding = p_orca_shieldings[func][funcS][pref][solv][0]
         if sm == "cpcm":
@@ -2555,14 +2555,21 @@ class qm_job:
     basis = None
     gfnv = None
     unpaired = 0
-    cosmorssetup = None
     spenergy = None
     hactive = False
     cactive = False
     pactive = False
     factive = False
     symmetry = "C1"
-    omp = 1
+    temperature = 298.15
+    nat = 0
+    progsettings = {
+                    "tempprogpath": "", 
+                    "xtbpath": "",
+                    "orca_old" : "",
+                    "omp": 1,
+                    "cosmorssetup": None,
+                    }
 
     def execute(self):
         pass
@@ -2573,7 +2580,7 @@ class qm_job:
     def _opt(self):
         pass
 
-    def _gbsa_rs(self):
+    def _gbsa_rs(self, environsettings):
         """ Calculate GBSA-RS"""
         if not self.boltzmann:
             tmp_gas = 0
@@ -2585,7 +2592,7 @@ class qm_job:
                 os.path.join(self.workdir, "gas.out"), "w", newline=None
             ) as outputfile:
                 callargs = [
-                    xtbpath,
+                    self.progsettings["xtbpath"],
                     "coord",
                     "-" + str(self.gfnv),
                     "-sp",
@@ -2601,7 +2608,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.gsolv = None
@@ -2617,7 +2624,7 @@ class qm_job:
                 os.path.join(self.workdir, "solv.out"), "w", newline=None
             ) as outputfile:
                 callargs = [
-                    xtbpath,
+                    self.progsettings["xtbpath"],
                     "coord",
                     "-" + str(self.gfnv),
                     "-sp",
@@ -2635,7 +2642,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.gsolv = None
@@ -2750,7 +2757,7 @@ class qm_job:
                     self.success = True
             return
 
-    def _xtbrrho(self):
+    def _xtbrrho(self, environsettings):
         """
         RRHO contribution with GFN-XTB, available both to ORCA and TM
         """
@@ -2764,7 +2771,7 @@ class qm_job:
                 os.path.join(self.workdir, "xcontrol-inp"), "w", newline=None
             ) as xcout:
                 xcout.write("$thermo\n")
-                xcout.write("    temp={}\n".format(args.temperature))
+                xcout.write("    temp={}\n".format(self.temperature))
                 xcout.write("$end")
             time.sleep(0.05)
             with open(
@@ -2772,7 +2779,7 @@ class qm_job:
             ) as outputfile:
                 if self.solv:
                     callargs = [
-                        xtbpath,
+                        self.progsettings["xtbpath"],
                         "coord",
                         "-" + str(self.gfnv),
                         "-ohess",
@@ -2787,7 +2794,7 @@ class qm_job:
                     ]
                 else:
                     callargs = [
-                        xtbpath,
+                        self.progsettings["xtbpath"],
                         "coord",
                         "-" + str(self.gfnv),
                         "-ohess",
@@ -2806,7 +2813,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.05)
             # check if converged:
@@ -2831,7 +2838,7 @@ class qm_job:
             if "ZPVE" not in data:
                 data["ZPVE"] = 0.0
             if "G(T)" in data:
-                if float(args.temperature) == 0:
+                if float(self.temperature) == 0:
                     self.rrho = data["ZPVE"]
                     self.success = True
                 else:
@@ -2858,7 +2865,7 @@ class qm_job:
             self.success = False
         return
 
-    def _TMSP(self):
+    def _TMSP(self, environsettings):
         """Turbomole single-point calculation"""
         if not self.boltzmann:
             with open(
@@ -2872,7 +2879,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
         time.sleep(0.02)
         # check if scf is converged:
@@ -2975,7 +2982,7 @@ class qm_job:
             a0 = False
         return a0
 
-    def _solv_complete(self):
+    def _solv_complete(self, environsettings):
         """complete COSMO-RS within the ENSO script"""
         if not self.boltzmann:
             print(
@@ -3045,10 +3052,10 @@ class qm_job:
                 os.path.join(old_workdir, "coord"), os.path.join(self.workdir, "coord")
             )
             # parametrization and version:
-            if "FINE" in self.cosmorssetup.split()[2]:
+            if "FINE" in self.progsettings["cosmorssetup"].split()[2]:
                 fine = True
                 param = "fine"
-                if cosmothermversion == 19:
+                if self.progsettings["cosmothermversion"] == 19:
                     param = "19-fine"
             else:
                 fine = False
@@ -3091,7 +3098,7 @@ class qm_job:
                             break
             # end cefine
             # running single-point in gas phase
-            self._TMSP()
+            self._TMSP(environsettings)
             if not self.success:
                 print("Error in COSMO-RS calculation!")
                 return 1
@@ -3125,7 +3132,7 @@ class qm_job:
                     out.write("$cosmo_out file=out.cosmo \n")
                     out.write("$cosmo_isorad \n")
                     out.write("$end \n")
-            self._TMSP()
+            self._TMSP(environsettings)
             if not self.success:
                 print("Error in COSMO-RS calculation during single-point calculation!")
                 return 1
@@ -3143,12 +3150,12 @@ class qm_job:
             }
             if fine:
                 solv_data = os.path.join(
-                    os.path.split(self.cosmorssetup.split()[5].strip('"'))[0],
+                    os.path.split(self.progsettings["cosmorssetup"].split()[5].strip('"'))[0],
                     "DATABASE-COSMO/BP-TZVPD-FINE",
                 )
             else:
                 solv_data = os.path.join(
-                    os.path.split(self.cosmorssetup.split()[5].strip('"'))[0],
+                    os.path.split(self.progsettings["cosmorssetup"].split()[5].strip('"'))[0],
                     "DATABASE-COSMO/BP-TZVP-COSMO",
                 )
             # test = ['ctd = BP_TZVP_C30_1601.ctd cdir = "/software/cluster/COSMOthermX16/COSMOtherm/CTDATA-FILES"']
@@ -3168,10 +3175,10 @@ class qm_job:
             with open(
                 os.path.join(self.workdir, "cosmotherm.inp"), "w", newline=None
             ) as out:
-                out.write(self.cosmorssetup + "\n")
+                out.write(self.progsettings["cosmorssetup"] + "\n")
                 # write from ensorc
                 out.write("EFILE VPFILE \n")
-                if cosmothermversion > 16:
+                if self.progsettings["cosmothermversion"] > 16:
                     pass
                 else:  # cosmothermX16
                     out.write("\n")  # needs empty line!
@@ -3191,7 +3198,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.1)
             # get T and Gsolv for version > cosmothermX16
@@ -3235,7 +3242,7 @@ class qm_job:
                 self.gsolv = None
                 self.success = False
                 return 1
-            temp = float(args.temperature)
+            temp = float(self.temperature)
             gsolv_out = (
                 a0[0]
                 + a0[1] * temp
@@ -3352,7 +3359,7 @@ class qm_job:
 
 
 class tm_job(qm_job):
-    def cefine(self):
+    def cefine(self, environsettings):
         """Do cefine for func"""
         removegf=False
         if self.basis == 'def2-QZVP(-gf)':
@@ -3700,7 +3707,7 @@ class tm_job(qm_job):
         time.sleep(0.15)
         return 0
 
-    def _sp(self):
+    def _sp(self, environsettings):
         """Turbomole single-point calculation"""
         if not self.boltzmann:
             print("Running single-point in {:18}".format(last_folders(self.workdir, 2)))
@@ -3715,7 +3722,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
         time.sleep(0.02)
         # check if scf is converged:
@@ -3766,7 +3773,7 @@ class tm_job(qm_job):
             self.success = False
         return
 
-    def _xtbopt(self):
+    def _xtbopt(self, environsettings):
         """Turbomole optimization using ANCOPT implemented in GFN-xTB"""
         if self.full:
             output = "opt-part2.out"
@@ -3776,13 +3783,13 @@ class tm_job(qm_job):
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if os.path.isfile(os.path.join(self.workdir, "xtbrestart")):
                 os.remove(os.path.join(self.workdir, "xtbrestart"))
-            if self.full:  # KS!!
+            if self.full: 
                 if self.sm == "dcosmors" and self.solv:
-                    callargs = [xtbpath, "coord", "-opt", "lax", "-tm"]
+                    callargs = [self.progsettings["xtbpath"], "coord", "-opt", "lax", "-tm"]
                 else:  # gas phase
-                    callargs = [xtbpath, "coord", "-opt", "-tm"]
+                    callargs = [self.progsettings["xtbpath"], "coord", "-opt", "-tm"]
             else:  # only crude
-                callargs = [xtbpath, "coord", "-opt", "crude", "-tm"]
+                callargs = [self.progsettings["xtbpath"], "coord", "-opt", "crude", "-tm"]
 
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
@@ -3795,7 +3802,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.energy = None
@@ -3858,7 +3865,7 @@ class tm_job(qm_job):
             self.success = False
         return
 
-    def _opt(self):
+    def _opt(self, environsettings):
         """Turbomole optimization using JOBEX, using adapted thresholds!"""
 
         # part2 = full optimization at either: normal (Econv/Eh = 5 × 10⁻⁶; Gconv/Eh·α⁻¹ = 1 × 10⁻³) or
@@ -3925,7 +3932,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
 
             time.sleep(0.02)
@@ -3981,12 +3988,12 @@ class tm_job(qm_job):
             return 1
         return
 
-    def _rrho(self):
+    def _rrho(self, environsettings):
         """Turbomole RRHO correction in the gas phase"""
         thermo_dict = {
-            "b97-3c": ["100", args.temperature, "1.0"],
-            "tpss": ["100", args.temperature, "1.0"],
-            "pbeh-3c": ["100", args.temperature, "0.95"],
+            "b97-3c": ["100", self.temperature, "1.0"],
+            "tpss": ["100", self.temperature, "1.0"],
+            "pbeh-3c": ["100", self.temperature, "0.95"],
         }
         opt = False  # parameter to check whether reoptimization is required
         if self.boltzmann:  # only for boltzmann evaluation
@@ -4028,12 +4035,12 @@ class tm_job(qm_job):
             self.solv = None
             opt = True
         if not self.boltzmann:  # only gas phase frequencies implemented!
-            self.cefine()
+            self.cefine(environsettings)
             # if optimization was carried out in solution, need new optimization in gas phase
             if opt:
-                self._opt()
+                self._opt(environsettings)
             else:  # if optimization was carried out in gas phase, coord is sufficient without reoptimization
-                self._sp()
+                self._sp(environsettings)
                 # rdgrad
                 print("Running rdgrad in {}".format(last_folders(self.workdir, 2)))
                 with open(
@@ -4047,7 +4054,7 @@ class tm_job(qm_job):
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=settings,
+                        env=environsettings,
                     )
                 time.sleep(0.02)
                 with open(
@@ -4075,14 +4082,14 @@ class tm_job(qm_job):
                 os.path.join(self.workdir, "aoforce.out"), "w", newline=None
             ) as outputfile:
                 subprocess.call(
-                    ["aoforce", "-smpcpus", str(args.omp)],
+                    ["aoforce", "-smpcpus", str(self.progsettings["omp"])],
                     shell=False,
                     stdin=None,
                     stderr=None,
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.05)
             # run thermo
@@ -4099,7 +4106,7 @@ class tm_job(qm_job):
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=settings,
+                        env=environsettings,
                     )
                 with open(
                     os.path.join(self.workdir, "thermo.out"),
@@ -4129,7 +4136,7 @@ class tm_job(qm_job):
                 self.success = False
         return
 
-    def _nmrJ(self):
+    def _nmrJ(self, environsettings):
         """ TM NMR coupling calculation"""
         print(
             "Running couplings calculation in {}".format(last_folders(self.workdir, 2))
@@ -4139,14 +4146,14 @@ class tm_job(qm_job):
             os.path.join(self.workdir, "escf.out"), "w", newline=None
         ) as outputfile:
             subprocess.call(
-                [escfpath, "-smpcpus", str(args.omp)],
+                [self.progsettings["tempprogpath"], "-smpcpus", str(self.progsettings["omp"])],
                 shell=False,
                 stdin=None,
                 stderr=subprocess.STDOUT,
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                env=settings,
+                #env=environsettings,
             )
         time.sleep(0.02)
         # check for convergence
@@ -4166,7 +4173,7 @@ class tm_job(qm_job):
                 self.success = False
         return
 
-    def _nmrS(self):
+    def _nmrS(self, environsettings):
         """TM NMR shielding calculation"""
         print(
             "Running shielding calculation in {}".format(last_folders(self.workdir, 2))
@@ -4176,14 +4183,14 @@ class tm_job(qm_job):
             os.path.join(self.workdir, "mpshift.out"), "w", newline=None
         ) as outputfile:
             subprocess.call(
-                [mpshiftpath, "-smpcpus", str(args.omp)],
+                [self.progsettings["tempprogpath"], "-smpcpus", str(self.progsettings["omp"])],
                 shell=False,
                 stdin=None,
                 stderr=subprocess.STDOUT,
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                env=settings,
+                env=environsettings,
             )
             time.sleep(0.02)
             # check if shift calculation is converged:
@@ -4216,26 +4223,26 @@ class tm_job(qm_job):
                 self.success = True
                 pass
             else:
-                self.cefine()
+                self.cefine(environsettings)
                 print("{}  ".format(self.name))
         elif self.jobtype == "sp":
-            self._sp()
+            self._sp(environsettings)
         elif self.jobtype == "xtbopt":
-            self._xtbopt()
+            self._xtbopt(environsettings)
         elif self.jobtype == "opt":
-            self._opt()
+            self._opt(environsettings)
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho()
+            self._xtbrrho(environsettings)
         elif self.jobtype == "rrhotm":
-            self._rrho()
+            self._rrho(environsettings)
         elif self.jobtype == "solv":
-            self._solv_complete()
+            self._solv_complete(environsettings)
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs()
+            self._gbsa_rs(environsettings)
         elif self.jobtype == "nmrJ":
-            self._nmrJ()
+            self._nmrJ(environsettings)
         elif self.jobtype == "nmrS":
-            self._nmrS()
+            self._nmrS(environsettings)
 
 
 class orca_job(qm_job):
@@ -4299,6 +4306,7 @@ class orca_job(qm_job):
                 "{} {: 09.7f}  {: 09.7f}  {: 09.7f}".format(atom[i], x[i], y[i], z[i])
             )
         self.coord = coordxyz
+        self.nat = len(coordxyz)
         return
 
     def xyz2coord(self):
@@ -4422,16 +4430,16 @@ class orca_job(qm_job):
                 for line in osp_calls[self.func]:
                     inp.write(line + "\n")
                 # nprocs
-                if int(self.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(self.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    elif orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4451,7 +4459,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, "sp.out"), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -4499,7 +4507,7 @@ class orca_job(qm_job):
             )
         return
 
-    def _xtbopt(self):
+    def _xtbopt(self, environsettings):
         """
         ORCA input generation and geometry optimization using ANCOPT
         implemented within xtb, generates inp.xyz, inp (orca-input) 
@@ -4514,7 +4522,7 @@ class orca_job(qm_job):
             # convert coord to xyz, write inp.xyz
             self.coord2xyz()
             with open(os.path.join(self.workdir, "inp.xyz"), "w", newline=None) as inp:
-                inp.write("{}\n\n".format(nat))
+                inp.write("{}\n\n".format(self.nat))
                 for line in self.coord:
                     inp.write(line + "\n")
             # add input file to coord
@@ -4526,7 +4534,8 @@ class orca_job(qm_job):
                 for line in tmp[:-1]:
                     newcoord.write(line)
                 newcoord.write("$external\n")
-                newcoord.write("   orca input file = inp\n")
+                newcoord.write("   orca input file= inp\n")
+                newcoord.write("   orca bin= {} \n".format(os.path.join(self.progsettings["tempprogpath"], 'orca')))
                 newcoord.write("$end")
             # input generation
             ogo_calls = {
@@ -4583,16 +4592,16 @@ class orca_job(qm_job):
                 # if not self.full:
                 #    inp.write('%geom\n    TolE 5e-4\n    TolRMSG 1e-2\n    TolMaxG ??\n    TolRMSD ??\n    TolMaxD 1.0\nend\n')
                 # nprocROR: in the optimization of
-                if int(self.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(self.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    if orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4609,11 +4618,11 @@ class orca_job(qm_job):
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if self.full:
                 if self.sm == "smd" and self.solv:
-                    callargs = [xtbpath, "coord", "--opt", "lax", "--orca"]
+                    callargs = [self.progsettings["xtbpath"], "coord", "--opt", "lax", "--orca"]
                 else:  # gas phase
-                    callargs = [xtbpath, "coord", "--opt", "--orca"]
+                    callargs = [self.progsettings["xtbpath"], "coord", "--opt", "--orca"]
             else:  # only crude
-                callargs = [xtbpath, "coord", "--opt", "crude", "--orca"]
+                callargs = [self.progsettings["xtbpath"], "coord", "--opt", "crude", "--orca"]
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
             ) as outputfile:
@@ -4780,16 +4789,16 @@ class orca_job(qm_job):
                 else:
                     for line in thresholds["crude"]:
                         inp.write(line + "\n")
-                if int(self.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(self.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    if orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4807,7 +4816,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -4940,9 +4949,9 @@ class orca_job(qm_job):
                     for line in ofreq_calls[self.func]:
                         inp.write(line + "\n")
                 # nprocs
-                if int(self.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(self.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # unpaired, charge, and coordinates
                 inp.write(
@@ -4962,7 +4971,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, "freq.out"), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -5086,16 +5095,16 @@ class orca_job(qm_job):
                 inp.write("end\n")
                 inp.write("end\n")
             # nprocs
-            if int(self.omp) >= 1:
+            if int(self.progsettings["omp"]) >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(self.omp))
+                inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
-                if orca_old:
+                if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
-                if orca_new:
+                else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
             if self.solv and self.sm == "cpcm":
@@ -5149,7 +5158,7 @@ class orca_job(qm_job):
         with open(
             os.path.join(self.workdir, "orcaJ.out"), "w", newline=None
         ) as outputfile:
-            call = [os.path.join(orcapath, "orca"), "inpJ"]
+            call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inpJ"]
             subprocess.call(
                 call,
                 shell=False,
@@ -5216,16 +5225,16 @@ class orca_job(qm_job):
             for line in nmrs_calls[self.func]:
                 inp.write(line + "\n")
             # nprocs
-            if self.omp >= 1:
+            if int(self.progsettings["omp"]) >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(self.omp))
+                inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
-                if orca_old:
+                if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
-                if orca_new:
+                else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
             if self.solv and self.sm == "cpcm":
@@ -5260,7 +5269,7 @@ class orca_job(qm_job):
         with open(
             os.path.join(self.workdir, "orcaS.out"), "w", newline=None
         ) as outputfile:
-            call = [os.path.join(orcapath, "orca"), "inpS"]
+            call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inpS"]
             subprocess.call(
                 call,
                 shell=False,
@@ -5299,15 +5308,15 @@ class orca_job(qm_job):
         elif self.jobtype == "opt":
             self._opt()
         elif self.jobtype == "xtbopt":
-            self._xtbopt()
+            self._xtbopt(environsettings)
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho()
+            self._xtbrrho(environsettings)
         elif self.jobtype == "rrhoorca":
             self._rrho()
         elif self.jobtype == "solv":
-            self._solv_complete()
+            self._solv_complete(environsettings)
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs()
+            self._gbsa_rs(environsettings)
         elif self.jobtype == "nmrJ":
             self._nmrJ()
         elif self.jobtype == "nmrS":
@@ -5984,7 +5993,6 @@ class handle_input:
         mpshiftpath = None
         escfpath = None
         orca_old = None
-        orca_new = None
         orcaversion = None
 
         with open(path, "r") as inp:
@@ -6030,10 +6038,8 @@ class handle_input:
                     tmp = "".join(tmp)
                     if float(tmp) < 4.1:
                         orca_old = True
-                        orca_new = False
                     elif float(tmp) >= 4.1:
                         orca_old = False
-                        orca_new = True
                     orcaversion = tmp
                 except:
                     print("WARNING: could not read ORCA version from " ".ensorc!")
@@ -6073,7 +6079,6 @@ class handle_input:
             mpshiftpath,
             escfpath,
             orca_old,
-            orca_new,
             orcaversion,
         )
 
@@ -6883,7 +6888,8 @@ class handle_input:
             else:
                 args.gsolv2 = args.sm
                 print(
-                    "WARNING: Solvent model for gsolv contribution of part 2 is not recognized! The same solvent "
+                    "WARNING: Solvent model for gsolv contribution of part 2 is "
+                    "not recognized! The same solvent "
                     "model as for the optimizations in part 2 is used: {}.".format(
                         args.gsolv2
                     )
@@ -7172,7 +7178,8 @@ def rrho_part23(
     if len(results) > 0:
         if args.rrhoprog == "xtb":
             # set omp num threads for GFN-xTB calculation
-            os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            #os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            environsettings["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
         # create new folder and copy optimized coord file in CONFx/rrho
         print("Setting up new directories.")
         for conf in list(results):
@@ -7218,21 +7225,28 @@ def rrho_part23(
             "func": args.func,
             "solv": args.solv,
             "boltzmann": args.boltzmann,
-            "omp": args.omp,
+            "temperature" : args.temperature,
+            "progsettings": {"omp": args.omp,
+                             "tempprogpath": "",
+                            },
         }
         if args.rrhoprog == "xtb":
             instructrrho["jobtype"] = "rrhoxtb"
             instructrrho["func"] = "GFN-xTB"
             instructrrho["gfnv"] = args.gfnv
+            instructrrho["progsettings"]["tempprogpath"] = ""
+            instructrrho["progsettings"]["xtbpath"] = xtbpath
         elif args.rrhoprog == "orca":
             instructrrho["jobtype"] = "rrhoorca"
             instructrrho["func"] = args.func
+            instructrrho["progsettings"]["tempprogpath"] = orcapath
         elif args.rrhoprog == "tm":
             instructrrho["jobtype"] = "rrhotm"
             instructrrho["func"] = args.func
+            instructrrho["progsettings"]["tempprogpath"] = ''
 
         results = run_in_parallel(
-            q, resultq, job, maxthreads, results, instructrrho, "rrho"
+            q, resultq, job, maxthreads, results, instructrrho,"rrho"
         )
         exit_log, fail_rate = check_tasks(results, args)
 
@@ -7448,9 +7462,13 @@ def additive_gsolv(
                 "chrg": args.chrg,
                 "unpaired": args.unpaired,
                 "solv": args.solv,
-                "cosmorssetup": cosmorssetup,
                 "boltzmann": args.boltzmann,
-                "omp": args.omp,
+                "temperature": args.temperature,
+                "progsettings": {"omp": args.omp,
+                                 "tempprogpath": "",
+                                 "cosmorssetup": cosmorssetup,
+                                 "cosmothermversion": cosmothermversion,
+                                },
             }
         elif js_smodel == "gbsa_gsolv":
             instructsolv = {
@@ -7460,7 +7478,11 @@ def additive_gsolv(
                 "solv": args.solv,
                 "gfnv": args.gfnv,
                 "boltzmann": args.boltzmann,
-                "omp": args.omp,
+                "temperature": args.temperature,
+                "progsettings": {"omp": args.omp,
+                                 "tempprogpath": xtbpath,
+                                 "xtbpath": xtbpath,
+                                },
             }
         results = run_in_parallel(
             q, resultq, job, maxthreads, results, instructsolv, folder
@@ -7567,7 +7589,6 @@ def enso_startup(cwd):
     impfref = ("CFCl3",)
     imppref = ("TMP/PH3",)
     orca_old = False
-    orca_new = False
 
     descr = """
      __________________________________________________
@@ -7661,7 +7682,6 @@ def enso_startup(cwd):
             mpshiftpath,
             escfpath,
             orca_old,
-            orca_new,
             orcaversion,
         ) = ensorcsettings.read_program_paths(ensorc)
         print("\nThe following pathways were read in:")
@@ -7800,10 +7820,7 @@ def enso_startup(cwd):
         elif shutil.which(os.path.join(orcapath, "orca")) is None:
             print("\nERROR: path for ORCA is not correct!")
             error_logical = True
-        if orca_new is None or orca_old is None:
-            print("\nERROR: ORCA version was not found!")
-            error_logical = True
-        elif orca_new is False and orca_old is False:
+        if orca_old is None:
             print("\nERROR: ORCA version was not found!")
             error_logical = True
     if args.rrhoprog == "xtb" or args.ancopt == "on":
@@ -7842,7 +7859,7 @@ def enso_startup(cwd):
         else:
             print("\nERROR: COSMOtherm has not been found!")
             error_logical = True
-    settings = os.environ
+    environsettings = os.environ
     if (
         args.prog == "tm"
         or args.prog3 == "tm"
@@ -7852,12 +7869,12 @@ def enso_startup(cwd):
     ):
         # preparation of parallel calculation with TM
         try:
-            if settings["PARA_ARCH"] == "SMP":
+            if environsettings["PARA_ARCH"] == "SMP":
                 try:
-                    settings["PARNODES"] = str(args.omp)
+                    environsettings["PARNODES"] = str(args.omp)
                     print(
                         "PARNODES for TM or COSMO-RS calculation was set "
-                        "to {}".format(settings["PARNODES"])
+                        "to {}".format(environsettings["PARNODES"])
                     )
                 except:
                     print("\nERROR: PARNODES can not be changed!")
@@ -8239,12 +8256,11 @@ def enso_startup(cwd):
         nat,
         maxthreads,
         xtbpath,
-        settings,
+        environsettings,
         dbpath,
         cosmothermversion,
         cosmorssetup,
         orcapath,
-        orca_new,
         orca_old,
         crestpath,
         mpshiftpath,
@@ -8253,7 +8269,7 @@ def enso_startup(cwd):
     )
 
 
-def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, settings):
+def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, environsettings):
     """ Run crude optimization"""
     save_errors = (
         []
@@ -8384,6 +8400,12 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "solv": args.solv,
                 "sm": args.sm,
                 "omp": args.omp,
+                "progsettings" :{
+                                "tempprogpath": "", 
+                                "xtbpath": xtbpath,
+                                "orca_old" : orca_old,
+                                "omp": args.omp,
+                                }
             }
             results = run_in_parallel(
                 q, resultq, job, maxthreads, directories, instructprep, args.func
@@ -8423,12 +8445,20 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": False,
-                "omp": args.omp
+                "progsettings": {"omp": args.omp,
+                                 "tempprogpath": "",
+                                },
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
+                instructopt["progsettings"]["xtbpath"] = xtbpath
             else:
                 instructopt["jobtype"] = "opt"
+            if job == tm_job:
+                instructopt["progsettings"]["tempprogpath"] = ""
+            elif job == orca_job:
+                instructopt["progsettings"]["tempprogpath"] = orcapath
+                instructopt["progsettings"]["orca_old"] = orca_old
 
             results = run_in_parallel(
                 q, resultq, job, maxthreads, results, instructopt, args.func
@@ -8667,7 +8697,7 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
     return results, json_dict
 
 
-def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings):
+def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings):
     """ """
     print("-----------------------------------------------------------")
     print(" PART 2 - optimizations and low level free energy")
@@ -8920,7 +8950,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": args.sm,
-                    "omp": args.omp,
+                    "progsettings": {"omp": args.omp,
+                                     "tempprogpath": "",
+                                    },
                 }
 
                 results = run_in_parallel(
@@ -8962,12 +8994,20 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": True,
-                "omp": args.omp,
+                "progsettings": {"omp": args.omp,
+                                 "tempprogpath": "",
+                                },
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
+                instructopt["progsettings"]["xtbpath"] = xtbpath
             else:
                 instructopt["jobtype"] = "opt"
+            if job == tm_job:
+                instructopt["progsettings"]["tempprogpath"] = ""
+            elif job == orca_job:
+                instructopt["progsettings"]["tempprogpath"] = orcapath
+                instructopt["progsettings"]["orca_old"] = orca_old
 
             results = run_in_parallel(
                 q, resultq, job, maxthreads, results, instructopt, args.func
@@ -9103,7 +9143,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
-                    "omp": args.omp
+                    "progsettings": {"omp": args.omp,
+                                     "tempprogpath": "",
+                                    },
                 }
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructprep, args.func
@@ -9155,8 +9197,16 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
-                    "omp": args.omp
+                    "progsettings": {"omp": args.omp,
+                                     "tempprogpath": "",
+                                    },
                 }
+                if job == tm_job:
+                    instructsp["progsettings"]["tempprogpath"] = ""
+                elif job == orca_job:
+                    instructsp["progsettings"]["tempprogpath"] = orcapath
+                    instructsp["progsettings"]["orca_old"] = orca_old
+
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructsp, args.func
                 )
@@ -9434,7 +9484,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
     return results, json_dict, rotdict
 
 
-def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings):
+def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings):
     """ """
     save_errors = []
     print("-----------------------------------------------------------")
@@ -9466,7 +9516,8 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             )
         )
         if args.rrhoprog == "xtb":
-            os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            #os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            environsettings["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
             print(
                 "number of cores used by xtb: {:{digits}} {}".format(
                     "", args.omp, digits=digilen - len("number of cores used by xtb")
@@ -9789,7 +9840,9 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "sm": "gas",
                         "boltzmann": args.boltzmann,
-                        "omp": args.omp,
+                        "progsettings": {"omp": args.omp,
+                                         "tempprogpath": "",
+                                        },
                     }
                     if args.sm3 == "smd" and args.solv:
                         instructprep["sm"] = "smd"  # solvation consider during SP
@@ -9839,8 +9892,16 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "basis": args.basis3,
                         "boltzmann": args.boltzmann,
-                        "omp": args.omp,
+                        "progsettings": {"omp": args.omp,
+                                         "tempprogpath": "",
+                                        },
                     }
+                    if job == tm_job:
+                        instructsp["progsettings"]["tempprogpath"] = ""
+                    elif job == orca_job:
+                        instructsp["progsettings"]["tempprogpath"] = orcapath
+                        instructsp["progsettings"]["orca_old"] = orca_old
+
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, args.func3
                     )
@@ -10184,10 +10245,11 @@ def part4(
     json_dict,
     maxthreads,
     xtbpath,
-    settings,
+    environsettings,
     rotdict,
     spectrumlist,
-):
+    escfpath,
+    mpshiftpath):
     """ """
     save_errors = []
     removelist = []
@@ -10521,7 +10583,9 @@ def part4(
                         "solv": args.solv,
                         "sm": args.sm4,
                         "NMR": True,
-                        "omp": args.omp,
+                        "progsettings": {"omp": args.omp,
+                                         "tempprogpath": "",
+                                        },
                     }
                     if args.hactive == "on":
                         instructprep["hactive"] = True
@@ -10573,8 +10637,16 @@ def part4(
                         "func": args.funcJ,
                         "solv": args.solv,
                         "basis": args.basisJ,
-                        "omp": args.omp,
+                        "progsettings": {"omp": args.omp,
+                                         "tempprogpath": "",
+                                        },
                     }
+                    if job == tm_job:
+                        instructsp["progsettings"]["tempprogpath"] = ""
+                    elif job == orca_job:
+                        instructsp["progsettings"]["tempprogpath"] = orcapath
+                        instructsp["progsettings"]["orca_old"] = orca_old
+
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, "NMR"
                     )
@@ -10638,7 +10710,8 @@ def part4(
                     "basis": args.basisJ,
                     "solv": args.solv,
                     "sm": args.sm4,
-                    "omp": args.omp,
+                    "progsettings": {"omp": args.omp,
+                                    },
                 }
                 if args.hactive == "on":
                     instructJ["hactive"] = True
@@ -10648,6 +10721,11 @@ def part4(
                     instructJ["factive"] = True
                 if args.pactive == "on":
                     instructJ["pactive"] = True
+                if job ==tm_job:
+                    instructJ["progsettings"]["tempprogpath"] = escfpath
+                elif job == orca_job:
+                    instructJ["progsettings"]["tempprogpath"] = orcapath
+                    instructJ["progsettings"]["orca_old"] = orca_old
 
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructJ, "NMR"
@@ -10859,7 +10937,9 @@ def part4(
                             "solv": args.solv,
                             "sm": args.sm4,
                             "NMR": True,
-                            "omp": args.omp,
+                            "progsettings": {"omp": args.omp,
+                                             "tempprogpath": "",
+                                            },
                         }
                         if args.hactive == "on":
                             instructprep["hactive"] = True
@@ -10914,9 +10994,16 @@ def part4(
                             "func": args.funcS,
                             "solv": args.solv,
                             "basis": args.basisS,
-                            "omp": args.omp,
+                            "progsettings": {"omp": args.omp,
+                                             "tempprogpath": "",
+                                            },
 
                         }
+                        if job == tm_job:
+                            instructsp["progsettings"]["tempprogpath"] = ""
+                        elif job == orca_job:
+                            instructsp["progsettings"]["tempprogpath"] = orcapath
+                            instructsp["progsettings"]["orca_old"] = orca_old
                         results = run_in_parallel(
                             q, resultq, job, maxthreads, results, instructsp, "NMR"
                         )
@@ -10980,7 +11067,9 @@ def part4(
                     "basis": args.basisS,
                     "solv": args.solv,
                     "sm": args.sm4,
-                    "omp": args.omp,
+                    "progsettings": {"omp": args.omp,
+                                     "tempprogpath": "",
+                                    },
                 }
                 if args.hactive == "on":
                     instructS["hactive"] = True
@@ -10990,6 +11079,11 @@ def part4(
                     instructS["factive"] = True
                 if args.pactive == "on":
                     instructS["pactive"] = True
+                if job == tm_job:
+                    instructS["progsettings"]["tempprogpath"] = mpshiftpath
+                elif job == orca_job:
+                    instructS["progsettings"]["tempprogpath"] = orcapath
+                    instructS["progsettings"]["orca_old"] = orca_old
 
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructS, "NMR"
@@ -11107,12 +11201,11 @@ if __name__ == "__main__":
         nat,
         maxthreads,
         xtbpath,
-        settings,
+        environsettings,
         dbpath,
         cosmothermversion,
         cosmorssetup,
         orcapath,
-        orca_new,
         orca_old,
         crestpath,
         mpshiftpath,
@@ -11123,7 +11216,7 @@ if __name__ == "__main__":
     # RUNNING PART1
     try:
         results, json_dict = part1(
-            args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, settings
+            args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, environsettings
         )
     except Exception as e:
         print("ERROR in part1!")
@@ -11135,7 +11228,7 @@ if __name__ == "__main__":
     # RUNNING PART2
     try:
         results, json_dict, rotdict = part2(
-            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
+            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
         )
     except Exception as e:
         print("ERROR in part2!")
@@ -11147,7 +11240,7 @@ if __name__ == "__main__":
     # RUNNING PART3
     try:
         results, json_dict = part3(
-            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
+            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
         )
     except Exception as e:
         print("ERROR in part3!")
@@ -11166,9 +11259,11 @@ if __name__ == "__main__":
             json_dict,
             maxthreads,
             xtbpath,
-            settings,
+            environsettings,
             rotdict,
             spectrumlist,
+            escfpath,
+            mpshiftpath
         )
     except Exception as e:
         print("ERROR in part4!")
