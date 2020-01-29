@@ -847,10 +847,22 @@ def read_json(nstruc, cwd, jsonfile, args):
                 or json_dict["flags"]["basis3"] != flags_dict["basis3"]
                 or json_dict["flags"]["sm3"] != flags_dict["sm3"]
             ):
-                if json_dict["flags"]["sm3"] in ("cosmors", "gbsa_gsolv") and flags_dict["sm3"] in ("cosmors", "gbsa_gsolv"):
-                    # dont recalculate SP
+                tmpreset = False
+                if json_dict["flags"]["func3"] != flags_dict["func3"]:
+                    tmpreset = True
+                if json_dict["flags"]["basis3"] != flags_dict["basis3"]:
+                    tmpreset = True
+                if ( 
+                    json_dict["flags"]["sm3"] in ("cosmors", "gbsa_gsolv") 
+                    and flags_dict["sm3"] in ("cosmors", "gbsa_gsolv")
+                    ):
+                    # dont recalculate SP if only the solent model is 
+                    # changed between additive corrections
                     pass
                 else:
+                    # if solvent model changed to eg cosmo dcosmors smd cpcm
+                    tmpreset = True
+                if tmpreset:
                     print(
                         "WARNING: The density functional / the basis set and/or"
                         " the solvent model for part 3 was changed \n"
@@ -941,8 +953,8 @@ def write_json(instruction, json_dict, jsonfile):
         sys.exit(1)
 
 
-def conformersxyz2coord(conformersxyz, nat, directory, conflist):
-    """read conformersxyz or xtb_confg.xyz and write coord into 
+def conformersxyz2coord(conformersxyz, nat, directory, conflist, onlyenergy=False):
+    """read crest_conformers.xyz and write coord into 
     designated folders, also get GFNx-xTB energies """
     with open(conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
         stringfile_lines = xyzfile.readlines()
@@ -957,10 +969,6 @@ def conformersxyz2coord(conformersxyz, nat, directory, conflist):
     for i in conflist:
         if "CONF" in str(i):
             i = int("".join(filter(str.isdigit, i)))
-        atom = []
-        x = []
-        y = []
-        z = []
         gfne[counter][0] = "".join(("CONF", str(i)))
         gfne[counter][1] = check_for_float(stringfile_lines[(i - 1) * (nat + 2) + 1])
         if gfne[counter][1] is None:
@@ -968,32 +976,37 @@ def conformersxyz2coord(conformersxyz, nat, directory, conflist):
                 "Error in float conversion while reading file"
                 " {}!".format(conformersxyz)
             )
-        start = (i - 1) * (nat + 2) + 2
-        end = i * (nat + 2)
-        bohr2ang = 0.52917721067
-        for line in stringfile_lines[start:end]:
-            atom.append(str(line.split()[0].lower()))
-            x.append(float(line.split()[1]) / bohr2ang)
-            y.append(float(line.split()[2]) / bohr2ang)
-            z.append(float(line.split()[3]) / bohr2ang)
-        coordxyz = []
-        for j in range(len(x)):
-            coordxyz.append(
-                "{: 09.7f} {: 09.7f}  {: 09.7f}  {}".format(x[j], y[j], z[j], atom[j])
-            )
-        if not os.path.isfile(os.path.join("CONF{}".format(i), directory, "coord")):
-            print(
-                "Write new coord file in {}".format(
-                    os.path.join("CONF{}".format(i), directory)
+        if not onlyenergy:
+            atom = []
+            x = []
+            y = []
+            z = []
+            start = (i - 1) * (nat + 2) + 2
+            end = i * (nat + 2)
+            bohr2ang = 0.52917721067
+            for line in stringfile_lines[start:end]:
+                atom.append(str(line.split()[0].lower()))
+                x.append(float(line.split()[1]) / bohr2ang)
+                y.append(float(line.split()[2]) / bohr2ang)
+                z.append(float(line.split()[3]) / bohr2ang)
+            coordxyz = []
+            for j in range(len(x)):
+                coordxyz.append(
+                    "{: 09.7f} {: 09.7f}  {: 09.7f}  {}".format(x[j], y[j], z[j], atom[j])
                 )
-            )
-            with open(
-                os.path.join("CONF{}".format(i), directory, "coord"), "w", newline=None
-            ) as coord:
-                coord.write("$coord\n")
-                for line in coordxyz:
-                    coord.write(line + "\n")
-                coord.write("$end")
+            if not os.path.isfile(os.path.join("CONF{}".format(i), directory, "coord")):
+                print(
+                    "Write new coord file in {}".format(
+                        os.path.join("CONF{}".format(i), directory)
+                    )
+                )
+                with open(
+                    os.path.join("CONF{}".format(i), directory, "coord"), "w", newline=None
+                ) as coord:
+                    coord.write("$coord\n")
+                    for line in coordxyz:
+                        coord.write(line + "\n")
+                    coord.write("$end")
         counter = counter + 1
     return gfne
 
@@ -3453,6 +3466,59 @@ class tm_job(qm_job):
                 "-d3",
             ],
         }
+        cef_rrhocalls = {
+            "b97-3c": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "b973c",
+                "-bas",
+                "def2-mTZVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+                "-novdw",
+            ],
+            "pbeh-3c": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "pbeh-3c",
+                "-bas",
+                "def2-mSVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+            ],
+            "tpss": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "tpss",
+                "-fpol",
+                "-bas",
+                "def2-TZVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+                "-d3",
+            ],
+            }
         cef_callsnmr = {
             "tpss": [
                 "cefine",
@@ -7047,7 +7113,7 @@ class handle_input:
         return spectrumlist
 
 
-def check_for_folder(conflist, functional):
+def check_for_folder(conflist, functional, debug):
     """Check if folders exist (of conformers calculated in previous run) """
     error_logical = False
     for i in conflist:
@@ -7059,7 +7125,7 @@ def check_for_folder(conflist, functional):
                 )
             )
             error_logical = True
-    if error_logical:
+    if error_logical and not debug:
         print("One or multiple directories are missing.")
         write_json("save_and_exit", json_dict, jsonfile)
     return
@@ -8375,7 +8441,7 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, en
             print("No conformers are considered additionally.")
 
         # check if directories for conformers exist
-        check_for_folder(["CONF" + str(i) for i in old_confs_list], args.func)
+        check_for_folder(["CONF" + str(i) for i in old_confs_list], args.func, args.debug)
 
         if len(new_confs_list) > 0:
             directories = new_folders(new_confs_list, args.func, save_errors)
@@ -8496,8 +8562,6 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, en
             # all conformers were already calculated
             results = []
         # adding conformers calculated before to results
-        # get GFN-xTB energies
-        gfne = conformersxyz2coord(conformersxyz, nat, args.func, all_confs_list)
         try:
             length = max([len(str(x)) for x in old_confs_list]) + 4
         except ValueError:
@@ -8519,6 +8583,8 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, en
         if len(results) == 0:
             print("ERROR: No conformer left!")
             write_json("save_and_exit", json_dict, jsonfile)
+        # get GFN-xTB energies
+        gfne = conformersxyz2coord(conformersxyz, nat, args.func, all_confs_list,True)
         # calculate relative energies for each conformer with GFN-xTB and DFT
         for i in results:
             for item in gfne:
@@ -8908,7 +8974,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environs
             print("Considered conformers:")
             print_block([i.name for i in results])
 
-        check_for_folder([i.name for i in tmp_results], args.func)
+        check_for_folder([i.name for i in tmp_results], args.func, args.debug)
 
         # setup queues
         q = Queue()
@@ -9760,7 +9826,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environs
                 print_block([i.name for i in results])
             if not args.boltzmann:
                 # check if directories of conformers calculated before exist,
-                check_for_folder([i.name for i in tmp_results], args.func)
+                check_for_folder([i.name for i in tmp_results], args.func, args.debug)
 
                 # setup queues
                 q = Queue()
