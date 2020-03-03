@@ -86,7 +86,9 @@ except ImportError:
     raise ImportError("ENSO uses the module traceback.")
 
 
-def cml(descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref):
+def cml(
+    descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref, siref
+):
     """ Get args object from commandline interface.
         Needs argparse module."""
 
@@ -422,6 +424,14 @@ def cml(descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref
         help="reference for 31P spectrum",
     )
     group5.add_argument(
+        "-siref",
+        "-siliconreference",
+        choices=siref,
+        dest="siref",
+        required=False,
+        help="reference for 29Si spectrum",
+    )
+    group5.add_argument(
         "-hactive",
         "-hydrogenactive",
         choices=["on", "off"],
@@ -452,6 +462,14 @@ def cml(descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref
         dest="pactive",
         required=False,
         help="calculate data for 31P NMR spectrum, either on or off",
+    )
+    group5.add_argument(
+        "-siactive",
+        "-siliconactive",
+        choices=["on", "off"],
+        dest="siactive",
+        required=False,
+        help="calculate data for 29Si NMR spectrum, either on or off",
     )
     group5.add_argument(
         "-mf",
@@ -634,6 +652,8 @@ def read_json(nstruc, cwd, jsonfile, args):
         ("13C_S", "not_calculated"),
         ("19F_J", "not_calculated"),
         ("19F_S", "not_calculated"),
+        ("29Si_J", "not_calculated"),
+        ("29Si_S", "not_calculated"),
         ("31P_J", "not_calculated"),
         ("31P_S", "not_calculated"),
         ("removed_by_user", False),
@@ -707,8 +727,8 @@ def read_json(nstruc, cwd, jsonfile, args):
                     json_dict[conf] = OrderedDict(conf_data.copy())
                     print("{} is added to the file enso.json.".format(conf))
         # check if all keys are set
-        J_list = ["1H_J", "13C_J", "19F_J", "31P_J"]
-        S_list = ["1H_S", "13C_S", "19F_S", "31P_S"]
+        J_list = ["1H_J", "13C_J", "19F_J", "31P_J", "29Si_J"]
+        S_list = ["1H_S", "13C_S", "19F_S", "31P_S", "29Si_S"]
         parts_keys = [
             "crude_opt",
             "opt",
@@ -721,10 +741,12 @@ def read_json(nstruc, cwd, jsonfile, args):
             "13C_J",
             "19F_J",
             "31P_J",
+            "29Si_J",
             "1H_S",
             "13C_S",
             "19F_S",
             "31P_S",
+            "29Si_S",
         ]
         parts_values = ["calculated", "failed", "not_calculated"]
         keys_numbers = [
@@ -749,6 +771,10 @@ def read_json(nstruc, cwd, jsonfile, args):
             if "CONF" in item:
                 # add information which might be missing in older
                 # enso.json files (<=version 1.2)
+                if "29Si_S" not in json_dict[item]:
+                    json_dict[item][ "29Si_S"] = "not_calculated"
+                if "29Si_J" not in json_dict[item]:
+                    json_dict[item][ "29Si_J"] = "not_calculated"
                 if "removed_by_user" not in json_dict[item]:
                     json_dict[item]["removed_by_user"] = False
                 if "gbsa_gsolv" not in json_dict[item]:
@@ -834,8 +860,8 @@ def read_json(nstruc, cwd, jsonfile, args):
             if json_dict["flags"]["rrhoprog"] != flags_dict["rrhoprog"]:
                 print(
                     "WARNING: The program for calculating GRRHO was changed "
-                    "with respect to the previous run.\n GRRHO is reset to "
-                    "not_calculated for all conformers."
+                    "with respect to the previous run.\n         GRRHO is reset "
+                    "to not_calculated for all conformers."
                 )
                 for i in json_dict.keys():
                     if "CONF" in i:
@@ -847,18 +873,28 @@ def read_json(nstruc, cwd, jsonfile, args):
                 or json_dict["flags"]["basis3"] != flags_dict["basis3"]
                 or json_dict["flags"]["sm3"] != flags_dict["sm3"]
             ):
-                if json_dict["flags"]["sm3"] in ("cosmors, gbsa_gsolv") and flags_dict[
-                    "sm3"
-                ] in ("cosmors, gbsa_gsolv"):
-                    # dont recalculate SP
+                tmpreset = False
+                if json_dict["flags"]["func3"] != flags_dict["func3"]:
+                    tmpreset = True
+                if json_dict["flags"]["basis3"] != flags_dict["basis3"]:
+                    tmpreset = True
+                if json_dict["flags"]["sm3"] in (
+                    "cosmors",
+                    "gbsa_gsolv",
+                ) and flags_dict["sm3"] in ("cosmors", "gbsa_gsolv"):
+                    # dont recalculate SP if only the solent model is
+                    # changed between additive corrections
                     pass
                 else:
+                    # if solvent model changed to eg cosmo dcosmors smd cpcm
+                    tmpreset = True
+                if tmpreset:
                     print(
-                        "WARNING: The density functional, the basis set and/or"
+                        "WARNING: The density functional / the basis set and/or"
                         " the solvent model for part 3 was changed \n"
-                        "         with respect to the previous run. The "
-                        "single-point of part 3 is reset to not_calculated"
-                        " for all conformers."
+                        "         with respect to the previous run.\n"
+                        "         The single-point of part 3 is reset to "
+                        "not_calculated for all conformers."
                     )
                     for i in json_dict.keys():
                         if "CONF" in i:
@@ -889,7 +925,7 @@ def read_json(nstruc, cwd, jsonfile, args):
                     print(
                         "WARNING: The density functional and/or the basis set "
                         "for the coupling calculation was changed with respect "
-                        "to the previous run. The coupling calculation is reset "
+                        "to the previous run.\n The coupling calculation is reset "
                         "to not_calculated for all conformers."
                     )
                     for i in json_dict.keys():
@@ -903,7 +939,7 @@ def read_json(nstruc, cwd, jsonfile, args):
                     print(
                         "WARNING: The density functional and/or the basis set "
                         "for the shielding calculation was changed with respect "
-                        "to the previous run. The shielding calculation is "
+                        "to the previous run.\n The shielding calculation is "
                         "reset to not_calculated for all conformers."
                     )
                     for i in json_dict.keys():
@@ -943,8 +979,8 @@ def write_json(instruction, json_dict, jsonfile):
         sys.exit(1)
 
 
-def conformersxyz2coord(conformersxyz, nat, directory, conflist):
-    """read conformersxyz or xtb_confg.xyz and write coord into 
+def conformersxyz2coord(conformersxyz, nat, directory, conflist, onlyenergy=False):
+    """read crest_conformers.xyz and write coord into 
     designated folders, also get GFNx-xTB energies """
     with open(conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
         stringfile_lines = xyzfile.readlines()
@@ -959,10 +995,6 @@ def conformersxyz2coord(conformersxyz, nat, directory, conflist):
     for i in conflist:
         if "CONF" in str(i):
             i = int("".join(filter(str.isdigit, i)))
-        atom = []
-        x = []
-        y = []
-        z = []
         gfne[counter][0] = "".join(("CONF", str(i)))
         gfne[counter][1] = check_for_float(stringfile_lines[(i - 1) * (nat + 2) + 1])
         if gfne[counter][1] is None:
@@ -970,32 +1002,41 @@ def conformersxyz2coord(conformersxyz, nat, directory, conflist):
                 "Error in float conversion while reading file"
                 " {}!".format(conformersxyz)
             )
-        start = (i - 1) * (nat + 2) + 2
-        end = i * (nat + 2)
-        bohr2ang = 0.52917721067
-        for line in stringfile_lines[start:end]:
-            atom.append(str(line.split()[0].lower()))
-            x.append(float(line.split()[1]) / bohr2ang)
-            y.append(float(line.split()[2]) / bohr2ang)
-            z.append(float(line.split()[3]) / bohr2ang)
-        coordxyz = []
-        for j in range(len(x)):
-            coordxyz.append(
-                "{: 09.7f} {: 09.7f}  {: 09.7f}  {}".format(x[j], y[j], z[j], atom[j])
-            )
-        if not os.path.isfile(os.path.join("CONF{}".format(i), directory, "coord")):
-            print(
-                "Write new coord file in {}".format(
-                    os.path.join("CONF{}".format(i), directory)
+        if not onlyenergy:
+            atom = []
+            x = []
+            y = []
+            z = []
+            start = (i - 1) * (nat + 2) + 2
+            end = i * (nat + 2)
+            bohr2ang = 0.52917721067
+            for line in stringfile_lines[start:end]:
+                atom.append(str(line.split()[0].lower()))
+                x.append(float(line.split()[1]) / bohr2ang)
+                y.append(float(line.split()[2]) / bohr2ang)
+                z.append(float(line.split()[3]) / bohr2ang)
+            coordxyz = []
+            for j in range(len(x)):
+                coordxyz.append(
+                    "{: 09.7f} {: 09.7f}  {: 09.7f}  {}".format(
+                        x[j], y[j], z[j], atom[j]
+                    )
                 )
-            )
-            with open(
-                os.path.join("CONF{}".format(i), directory, "coord"), "w", newline=None
-            ) as coord:
-                coord.write("$coord\n")
-                for line in coordxyz:
-                    coord.write(line + "\n")
-                coord.write("$end")
+            if not os.path.isfile(os.path.join("CONF{}".format(i), directory, "coord")):
+                print(
+                    "Write new coord file in {}".format(
+                        os.path.join("CONF{}".format(i), directory)
+                    )
+                )
+                with open(
+                    os.path.join("CONF{}".format(i), directory, "coord"),
+                    "w",
+                    newline=None,
+                ) as coord:
+                    coord.write("$coord\n")
+                    for line in coordxyz:
+                        coord.write(line + "\n")
+                    coord.write("$end")
         counter = counter + 1
     return gfne
 
@@ -1037,17 +1078,13 @@ def crest_routine(results, func, crestcheck, json_dict):
     ### write crest file in xyz
     with open(fp, "a", encoding=coding, newline=None) as inp:
         for i in results:
-            inp.write("  {}\n".format(nat))  ### number of atoms
-            inp.write("{:20.8f}        !{}\n".format(i.energy, i.name))  ### energy
-            conf_xyz = coord2xyz(
+            conf_xyz, nat = coord2xyz(
                 os.path.join(cwd, i.name, func)
             )  ### coordinates in xyz
-            for j in conf_xyz:
-                inp.write(
-                    " {:3} {:19.10f} {:19.10f} {:19.10f}\n".format(
-                        j[0].upper(), float(j[1]), float(j[2]), float(j[3])
-                    )
-                )
+            inp.write("  {}\n".format(nat))  ### number of atoms
+            inp.write("{:20.8f}        !{}\n".format(i.energy, i.name))  ### energy
+            for line in conf_xyz:
+                inp.write(line + "\n")
 
     print(
         "\nChecking if conformers became rotamers of each other during "
@@ -1066,7 +1103,7 @@ def crest_routine(results, func, crestcheck, json_dict):
             universal_newlines=False,
             cwd=dirp,
             stdout=outputfile,
-            env=settings,
+            env=environsettings,
         )
     time.sleep(0.05)
     ### read in crest results
@@ -1155,15 +1192,18 @@ def crest_routine(results, func, crestcheck, json_dict):
 
 def write_trj(results, outpath, optfolder):
     """Write trajectory to file"""
-
     try:
         with open(outpath, "a", encoding=coding, newline=None) as out:
             for i in results:
-                out.write("  {}\n".format(nat))  ### number of atoms
-                out.write("{:20.8f}        !{}\n".format(i.energy, i.name))  ### energy
-                conf_xyz = coord2xyz(
+                conf_xyz, nat = coord2xyz(
                     os.path.join(cwd, i.name, optfolder)
                 )  ### coordinates in xyz
+                out.write("  {}\n".format(nat))  ### number of atoms
+                out.write(
+                    "E= {:20.8f}  G= {:20.8f}      !{}\n".format(
+                        i.energy, i.free_energy, i.name
+                    )
+                )  ### energy
                 for j in conf_xyz:
                     out.write(
                         " {:3} {:19.10f} {:19.10f} {:19.10f}\n".format(
@@ -1172,7 +1212,6 @@ def write_trj(results, outpath, optfolder):
                     )
     except (FileExistsError, ValueError):
         print("Could not write trajectory: {}.".format(last_folders(outpath, 1)))
-
     return
 
 
@@ -1182,21 +1221,24 @@ def coord2xyz(path):
     bohr2ang = 0.52917721067
     with open(os.path.join(path, "coord"), "r", encoding=coding, newline=None) as f:
         coord = f.readlines()
-        x = []
-        y = []
-        z = []
-        atom = []
-        for line in coord[1:]:
-            if "$" in line:  # stop at $end ...
-                break
-            x.append(float(line.split()[0]) * bohr2ang)
-            y.append(float(line.split()[1]) * bohr2ang)
-            z.append(float(line.split()[2]) * bohr2ang)
-            atom.append(str(line.split()[3].lower()))
-        coordxyz = []
-        for i in range(len(x)):
-            coordxyz.append([atom[i], x[i], y[i], z[i]])
-    return coordxyz
+    x = []
+    y = []
+    z = []
+    atom = []
+    for line in coord[1:]:
+        if "$" in line:  # stop at $end ...
+            break
+        x.append(float(line.split()[0]) * bohr2ang)
+        y.append(float(line.split()[1]) * bohr2ang)
+        z.append(float(line.split()[2]) * bohr2ang)
+        atom.append(str(line.split()[3].lower()))
+    # natoms = int(len(coord[1:-1])) # unused
+    coordxyz = []
+    for i in range(len(x)):
+        coordxyz.append(
+            "{:3} {: 19.10f}  {: 19.10f}  {: 19.10f}".format(atom[i], x[i], y[i], z[i])
+        )
+    return coordxyz, len(coordxyz)
 
 
 def RMSD_routine(workdir, nat):
@@ -1267,7 +1309,7 @@ def RMSD_subprocess(workdir):
             universal_newlines=False,
             cwd=workdir,
             stdout=outputfile,
-            env=settings,
+            env=environsettings,
         )
     with open(os.path.join(workdir, "rmsd"), "r", encoding=coding, newline=None) as out:
         stor = out.readlines()
@@ -1289,7 +1331,7 @@ def write_anmr_enso(cwd, results):
         fmtenergy = max([len("{:.5f}".format(i.energy)) for i in results])
     except:
         length = 6
-        fmtlenght = 7
+        fmtenergy = 7
     with open(os.path.join(cwd, "anmr_enso"), "w", newline="") as out:
         out.write(
             "{:5} {:{digits}} {:{digits}} {:6} {:{digits2}} {:7} {:7}\n".format(
@@ -1333,1058 +1375,1885 @@ def writing_anmrrc(
     cref,
     fref,
     pref,
+    siref,
     hactive,
     cactive,
     factive,
     pactive,
+    siactive,
     calcJ,
     calcS,
+    save_errors,
 ):
-
-    if func == "pbe0":
-        func = "pbeh-3c"
-
-    # 1H
     h_tm_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.778"],
-                    "chcl3": ["31.786"],
-                    "ch2cl2": ["31.785"],
-                    "dmso": ["31.776"],
-                    "h2o": ["31.775"],
-                    "methanol": ["31.780"],
-                    "thf": ["31.783"],
-                    "toluene": ["31.790"],
-                    "gas": ["32.022"],
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 32.0512048,
+                    "acetone": 32.03971003333333,
+                    "chcl3": 32.041133316666674,
+                    "acetonitrile": 32.03617056666667,
+                    "ch2cl2": 32.04777176666666,
+                    "dmso": 32.039681316666666,
+                    "h2o": 32.036860174999994,
+                    "methanol": 32.04573335,
+                    "thf": 32.04154705833333,
+                    "toluene": 32.02829061666666,
                 },
-                "DSS": {
-                    "acetone": ["31.763"],
-                    "chcl3": ["31.767"],
-                    "ch2cl2": ["31.767"],
-                    "dmso": ["31.763"],
-                    "h2o": ["31.762"],
-                    "methanol": ["31.766"],
-                    "thf": ["31.765"],
-                    "toluene": ["31.768"],
-                    "gas": ["31.793"],
+                "pbe0": {
+                    "gas": 31.820450258333327,
+                    "acetone": 31.801199816666667,
+                    "chcl3": 31.807363400000003,
+                    "acetonitrile": 31.797744033333334,
+                    "ch2cl2": 31.815502166666665,
+                    "dmso": 31.797286500000002,
+                    "h2o": 31.801018416666665,
+                    "methanol": 31.809920125,
+                    "thf": 31.802681225,
+                    "toluene": 31.790892416666665,
+                },
+                "pbeh-3c": {
+                    "gas": 32.32369869999999,
+                    "acetone": 32.30552229166667,
+                    "chcl3": 32.30850654166667,
+                    "acetonitrile": 32.3015773,
+                    "ch2cl2": 32.31627083333333,
+                    "dmso": 32.303862816666665,
+                    "h2o": 32.30345545833333,
+                    "methanol": 32.3130819,
+                    "thf": 32.306951225,
+                    "toluene": 32.29417180833333,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 32.099305599999994,
+                    "acetone": 32.07685382499999,
+                    "chcl3": 32.078372550000005,
+                    "acetonitrile": 32.067920741666676,
+                    "ch2cl2": 32.0876576,
+                    "dmso": 32.07713496666667,
+                    "h2o": 32.07222951666666,
+                    "methanol": 32.085467083333334,
+                    "thf": 32.07950451666667,
+                    "toluene": 32.06162065,
+                },
+                "pbe0": {
+                    "gas": 31.869211950000004,
+                    "acetone": 31.83879448333333,
+                    "chcl3": 31.845031441666663,
+                    "acetonitrile": 31.829924375,
+                    "ch2cl2": 31.855811533333338,
+                    "dmso": 31.835178675000005,
+                    "h2o": 31.83680665833334,
+                    "methanol": 31.850090208333338,
+                    "thf": 31.841073758333337,
+                    "toluene": 31.824697675,
+                },
+                "pbeh-3c": {
+                    "gas": 32.37107341666667,
+                    "acetone": 32.341934458333334,
+                    "chcl3": 32.34503841666666,
+                    "acetonitrile": 32.332714675,
+                    "ch2cl2": 32.35537393333334,
+                    "dmso": 32.34058045833333,
+                    "h2o": 32.338073200000004,
+                    "methanol": 32.35207416666667,
+                    "thf": 32.34418670833334,
+                    "toluene": 32.32693729166667,
                 },
             },
             "tpss": {
-                "TMS": {
-                    "acetone": ["32.015"],
-                    "chcl3": ["32.022"],
-                    "ch2cl2": ["32.022"],
-                    "dmso": ["32.014"],
-                    "h2o": ["32.013"],
-                    "methanol": ["32.018"],
-                    "thf": ["32.019"],
-                    "toluene": ["32.023"],
-                    "gas": ["32.051"],
+                "tpss": {
+                    "gas": 31.86774000000001,
+                    "acetone": 31.848927016666664,
+                    "chcl3": 31.851003891666664,
+                    "acetonitrile": 31.843538541666664,
+                    "ch2cl2": 31.860415141666664,
+                    "dmso": 31.849057266666673,
+                    "h2o": 31.844762508333332,
+                    "methanol": 31.857667625,
+                    "thf": 31.851878716666665,
+                    "toluene": 31.833541825,
                 },
-                "DSS": {
-                    "acetone": ["31.998"],
-                    "chcl3": ["32.000"],
-                    "ch2cl2": ["32.002"],
-                    "dmso": ["31.998"],
-                    "h2o": ["31.997"],
-                    "methanol": ["32.002"],
-                    "thf": ["31.999"],
-                    "toluene": ["32.000"],
-                    "gas": ["32.021"],
+                "pbe0": {
+                    "gas": 31.636587116666664,
+                    "acetone": 31.60924136666667,
+                    "chcl3": 31.616506625,
+                    "acetonitrile": 31.604173191666664,
+                    "ch2cl2": 31.62743169166667,
+                    "dmso": 31.604975658333334,
+                    "h2o": 31.607992624999994,
+                    "methanol": 31.620864658333335,
+                    "thf": 31.611675816666665,
+                    "toluene": 31.59546233333333,
                 },
-            },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.825"],
-                    "chcl3": ["31.832"],
-                    "ch2cl2": ["31.830"],
-                    "dmso": ["31.824"],
-                    "h2o": ["31.821"],
-                    "methanol": ["31.826"],
-                    "thf": ["31.829"],
-                    "toluene": ["31.836"],
-                    "gas": ["31.864"],
-                },
-                "DSS": {
-                    "acetone": ["31.811"],
-                    "chcl3": ["31.811"],
-                    "ch2cl2": ["31.812"],
-                    "dmso": ["31.810"],
-                    "h2o": ["31.809"],
-                    "methanol": ["31.813"],
-                    "thf": ["31.814"],
-                    "toluene": ["31.815"],
-                    "gas": ["31.793"],
+                "pbeh-3c": {
+                    "gas": 32.14311896666666,
+                    "acetone": 32.11710325,
+                    "chcl3": 32.12106585833333,
+                    "acetonitrile": 32.11156126666667,
+                    "ch2cl2": 32.1315459,
+                    "dmso": 32.114840533333336,
+                    "h2o": 32.11376850833333,
+                    "methanol": 32.127508733333336,
+                    "thf": 32.11950190833333,
+                    "toluene": 32.1023676,
                 },
             },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["32.061"],
-                    "chcl3": ["32.067"],
-                    "ch2cl2": ["32.066"],
-                    "dmso": ["32.061"],
-                    "h2o": ["32.058"],
-                    "methanol": ["32.063"],
-                    "thf": ["32.065"],
-                    "toluene": ["32.069"],
-                    "gas": ["32.093"],
-                },
-                "DSS": {
-                    "acetone": ["32.045"],
-                    "chcl3": ["32.044"],
-                    "ch2cl2": ["32.046"],
-                    "dmso": ["32.045"],
-                    "h2o": ["32.043"],
-                    "methanol": ["32.048"],
-                    "thf": ["32.048"],
-                    "toluene": ["32.046"],
-                    "gas": ["32.021"],
-                },
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.598"],
-                    "chcl3": ["31.605"],
-                    "ch2cl2": ["31.604"],
-                    "dmso": ["31.629"],
-                    "h2o": ["31.596"],
-                    "methanol": ["31.599"],
-                    "thf": ["31.603"],
-                    "toluene": ["31.609"],
-                    "gas": ["31.638"],
-                },
-                "DSS": {
-                    "acetone": ["31.584"],
-                    "chcl3": ["31.587"],
-                    "ch2cl2": ["31.589"],
-                    "dmso": ["31.585"],
-                    "h2o": ["31.582"],
-                    "methanol": ["31.588"],
-                    "thf": ["31.588"],
-                    "toluene": ["31.590"],
-                    "gas": ["31.793"],
-                },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["31.836"],
-                    "chcl3": ["31.841"],
-                    "ch2cl2": ["31.841"],
-                    "dmso": ["31.835"],
-                    "h2o": ["31.834"],
-                    "methanol": ["31.838"],
-                    "thf": ["31.840"],
-                    "toluene": ["31.843"],
-                    "gas": ["31.869"],
-                },
-                "DSS": {
-                    "acetone": ["31.820"],
-                    "chcl3": ["31.821"],
-                    "ch2cl2": ["31.824"],
-                    "dmso": ["31.821"],
-                    "h2o": ["31.818"],
-                    "methanol": ["31.824"],
-                    "thf": ["31.823"],
-                    "toluene": ["31.823"],
-                    "gas": ["32.021"],
-                },
-            },
-        },
+        }
     }
     h_orca_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.506"],
-                    "chcl3": ["31.516"],
-                    "ch2cl2": ["31.510"],
-                    "dmso": ["31.506"],
-                    "h2o": ["31.517"],
-                    "methanol": ["31.504"],
-                    "thf": ["31.512"],
-                    "toluene": ["31.530"],
-                    "gas": ["31.576"],
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 32.17000000000001,
+                    "acetone": 32.09433333333334,
+                    "chcl3": 32.10649999999999,
+                    "acetonitrile": 32.09366666666667,
+                    "ch2cl2": 32.099,
+                    "dmso": 32.09466666666666,
+                    "h2o": 32.10341666666666,
+                    "methanol": 32.09250000000001,
+                    "thf": 32.10183333333333,
+                    "toluene": 32.122833333333325,
                 },
-                "DSS": {
-                    "acetone": ["31.491"],
-                    "chcl3": ["31.500"],
-                    "ch2cl2": ["31.493"],
-                    "dmso": ["31.492"],
-                    "h2o": ["31.499"],
-                    "methanol": ["31.483"],
-                    "thf": ["31.497"],
-                    "toluene": ["31.509"],
-                    "gas": ["31.541"],
+                "pbe0": {
+                    "gas": 31.819000000000003,
+                    "acetone": 31.732666666666663,
+                    "chcl3": 31.747000000000003,
+                    "acetonitrile": 31.73166666666667,
+                    "ch2cl2": 31.738416666666666,
+                    "dmso": 31.732666666666663,
+                    "h2o": 31.741500000000002,
+                    "methanol": 31.73066666666666,
+                    "thf": 31.74116666666667,
+                    "toluene": 31.765999999999995,
+                },
+                "dsd-blyp": {
+                    "gas": 31.91416666666667,
+                    "acetone": 31.83541666666667,
+                    "chcl3": 31.84766666666667,
+                    "acetonitrile": 31.834666666666667,
+                    "ch2cl2": 31.839916666666667,
+                    "dmso": 31.835583333333332,
+                    "h2o": 31.844166666666666,
+                    "methanol": 31.833166666666667,
+                    "thf": 31.842583333333334,
+                    "toluene": 31.86475,
+                },
+                "wb97x": {
+                    "gas": 31.952,
+                    "acetone": 31.867499999999996,
+                    "chcl3": 31.880999999999997,
+                    "acetonitrile": 31.866666666666664,
+                    "ch2cl2": 31.872666666666664,
+                    "dmso": 31.86758333333333,
+                    "h2o": 31.876083333333337,
+                    "methanol": 31.86533333333333,
+                    "thf": 31.8755,
+                    "toluene": 31.89966666666666,
+                },
+                "pbeh-3c": {
+                    "gas": 32.324999999999996,
+                    "acetone": 32.23866666666667,
+                    "chcl3": 32.25299999999999,
+                    "acetonitrile": 32.23783333333333,
+                    "ch2cl2": 32.24466666666667,
+                    "dmso": 32.23866666666667,
+                    "h2o": 32.24733333333333,
+                    "methanol": 32.23666666666667,
+                    "thf": 32.24733333333333,
+                    "toluene": 32.272,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 32.21800000000001,
+                    "acetone": 32.140166666666666,
+                    "chcl3": 32.152166666666666,
+                    "acetonitrile": 32.140499999999996,
+                    "ch2cl2": 32.145,
+                    "dmso": 32.14183333333333,
+                    "h2o": 32.175000000000004,
+                    "methanol": 32.13766666666667,
+                    "thf": 32.148,
+                    "toluene": 32.168833333333325,
+                },
+                "pbe0": {
+                    "gas": 31.868,
+                    "acetone": 31.778999999999996,
+                    "chcl3": 31.792583333333337,
+                    "acetonitrile": 31.778666666666663,
+                    "ch2cl2": 31.784333333333336,
+                    "dmso": 31.78016666666667,
+                    "h2o": 31.815166666666666,
+                    "methanol": 31.77633333333333,
+                    "thf": 31.787500000000005,
+                    "toluene": 31.812,
+                },
+                "dsd-blyp": {
+                    "gas": 31.962999999999997,
+                    "acetone": 31.881250000000005,
+                    "chcl3": 31.89325,
+                    "acetonitrile": 31.881583333333335,
+                    "ch2cl2": 31.886000000000006,
+                    "dmso": 31.882583333333333,
+                    "h2o": 31.916833333333333,
+                    "methanol": 31.878500000000003,
+                    "thf": 31.889,
+                    "toluene": 31.910750000000004,
+                },
+                "wb97x": {
+                    "gas": 32.00091666666666,
+                    "acetone": 31.913416666666663,
+                    "chcl3": 31.9265,
+                    "acetonitrile": 31.9135,
+                    "ch2cl2": 31.918499999999995,
+                    "dmso": 31.914666666666665,
+                    "h2o": 31.94883333333333,
+                    "methanol": 31.910666666666668,
+                    "thf": 31.921500000000005,
+                    "toluene": 31.94516666666667,
+                },
+                "pbeh-3c": {
+                    "gas": 32.373,
+                    "acetone": 32.28366666666667,
+                    "chcl3": 32.29716666666666,
+                    "acetonitrile": 32.28333333333333,
+                    "ch2cl2": 32.288666666666664,
+                    "dmso": 32.284499999999994,
+                    "h2o": 32.317166666666665,
+                    "methanol": 32.28066666666667,
+                    "thf": 32.29183333333334,
+                    "toluene": 32.31616666666667,
                 },
             },
             "tpss": {
-                "TMS": {
-                    "acetone": ["31.837"],
-                    "chcl3": ["31.845"],
-                    "ch2cl2": ["31.840"],
-                    "dmso": ["31.838"],
-                    "h2o": ["31.848"],
-                    "methanol": ["31.835"],
-                    "thf": ["31.842"],
-                    "toluene": ["31.857"],
-                    "gas": ["31.896"],
+                "tpss": {
+                    "gas": 31.97300000000001,
+                    "acetone": 31.898,
+                    "chcl3": 31.909500000000005,
+                    "acetonitrile": 31.897833333333338,
+                    "ch2cl2": 31.902666666666665,
+                    "dmso": 31.898999999999997,
+                    "h2o": 31.910666666666668,
+                    "methanol": 31.89566666666667,
+                    "thf": 31.90516666666667,
+                    "toluene": 31.925,
                 },
-                "DSS": {
-                    "acetone": ["31.818"],
-                    "chcl3": ["31.823"],
-                    "ch2cl2": ["31.819"],
-                    "dmso": ["31.819"],
-                    "h2o": ["31.828"],
-                    "methanol": ["31.809"],
-                    "thf": ["31.822"],
-                    "toluene": ["31.831"],
-                    "gas": ["31.542"],
+                "pbe0": {
+                    "gas": 31.625,
+                    "acetone": 31.537166666666668,
+                    "chcl3": 31.550499999999996,
+                    "acetonitrile": 31.536666666666665,
+                    "ch2cl2": 31.542500000000004,
+                    "dmso": 31.537666666666667,
+                    "h2o": 31.549500000000005,
+                    "methanol": 31.53458333333334,
+                    "thf": 31.545499999999993,
+                    "toluene": 31.569,
                 },
-            },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.556"],
-                    "chcl3": ["31.566"],
-                    "ch2cl2": ["31.560"],
-                    "dmso": ["31.558"],
-                    "h2o": ["31.571"],
-                    "methanol": ["31.554"],
-                    "thf": ["31.563"],
-                    "toluene": ["31.581"],
-                    "gas": ["31.623"],
+                "dsd-blyp": {
+                    "gas": 31.718000000000004,
+                    "acetone": 31.639666666666667,
+                    "chcl3": 31.651416666666663,
+                    "acetonitrile": 31.639499999999998,
+                    "ch2cl2": 31.644083333333338,
+                    "dmso": 31.640416666666667,
+                    "h2o": 31.65216666666667,
+                    "methanol": 31.636916666666664,
+                    "thf": 31.64683333333333,
+                    "toluene": 31.667833333333334,
                 },
-                "DSS": {
-                    "acetone": ["31.539"],
-                    "chcl3": ["31.545"],
-                    "ch2cl2": ["31.542"],
-                    "dmso": ["31.540"],
-                    "h2o": ["31.554"],
-                    "methanol": ["31.540"],
-                    "thf": ["31.542"],
-                    "toluene": ["31.553"],
-                    "gas": ["31.586"],
+                "wb97x": {
+                    "gas": 31.757,
+                    "acetone": 31.672250000000002,
+                    "chcl3": 31.68516666666667,
+                    "acetonitrile": 31.67166666666667,
+                    "ch2cl2": 31.6775,
+                    "dmso": 31.67266666666666,
+                    "h2o": 31.68466666666666,
+                    "methanol": 31.66966666666667,
+                    "thf": 31.680166666666665,
+                    "toluene": 31.703,
                 },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["31.887"],
-                    "chcl3": ["31.895"],
-                    "ch2cl2": ["31.890"],
-                    "dmso": ["31.889"],
-                    "h2o": ["31.903"],
-                    "methanol": ["31.885"],
-                    "thf": ["31.893"],
-                    "toluene": ["31.908"],
-                    "gas": ["31.944"],
-                },
-                "DSS": {
-                    "acetone": ["31.862"],
-                    "chcl3": ["31.865"],
-                    "ch2cl2": ["31.863"],
-                    "dmso": ["31.863"],
-                    "h2o": ["31.876"],
-                    "methanol": ["31.860"],
-                    "thf": ["31.863"],
-                    "toluene": ["31.871"],
-                    "gas": ["31.898"],
+                "pbeh-3c": {
+                    "gas": 32.13400000000001,
+                    "acetone": 32.047333333333334,
+                    "chcl3": 32.06066666666667,
+                    "acetonitrile": 32.04666666666666,
+                    "ch2cl2": 32.05266666666666,
+                    "dmso": 32.047666666666665,
+                    "h2o": 32.059,
+                    "methanol": 32.044666666666664,
+                    "thf": 32.05566666666666,
+                    "toluene": 32.079,
                 },
             },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["31.321"],
-                    "chcl3": ["31.330"],
-                    "ch2cl2": ["31.324"],
-                    "dmso": ["31.322"],
-                    "h2o": ["31.333"],
-                    "methanol": ["31.318"],
-                    "thf": ["31.327"],
-                    "toluene": ["31.343"],
-                    "gas": ["31.385"],
-                },
-                "DSS": {
-                    "acetone": ["31.305"],
-                    "chcl3": ["31.313"],
-                    "ch2cl2": ["31.307"],
-                    "dmso": ["31.304"],
-                    "h2o": ["31.316"],
-                    "methanol": ["31.302"],
-                    "thf": ["31.310"],
-                    "toluene": ["31.305"],
-                    "gas": ["31.354"],
-                },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["31.652"],
-                    "chcl3": ["31.659"],
-                    "ch2cl2": ["31.655"],
-                    "dmso": ["31.653"],
-                    "h2o": ["31.665"],
-                    "methanol": ["31.649"],
-                    "thf": ["31.657"],
-                    "toluene": ["31.669"],
-                    "gas": ["31.705"],
-                },
-                "DSS": {
-                    "acetone": ["31.631"],
-                    "chcl3": ["31.633"],
-                    "ch2cl2": ["31.632"],
-                    "dmso": ["31.631"],
-                    "h2o": ["31.644"],
-                    "methanol": ["31.629"],
-                    "thf": ["31.633"],
-                    "toluene": ["31.619"],
-                    "gas": ["31.667"],
-                },
-            },
-        },
+        }
     }
-    # 13C
     c_tm_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["189.942"],
-                    "chcl3": ["189.674"],
-                    "ch2cl2": ["189.860"],
-                    "dmso": ["189.986"],
-                    "h2o": ["189.999"],
-                    "methanol": ["189.997"],
-                    "thf": ["189.798"],
-                    "toluene": ["189.348"],
-                    "gas": ["188.900"],
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 186.6465687,
+                    "acetone": 187.27903107499998,
+                    "chcl3": 187.238498325,
+                    "acetonitrile": 187.372512775,
+                    "ch2cl2": 187.0771589,
+                    "dmso": 187.243299225,
+                    "h2o": 187.37157565,
+                    "methanol": 187.10988087500002,
+                    "thf": 187.19458635,
+                    "toluene": 187.48276635,
                 },
-                "DSS": {
-                    "acetone": ["191.817"],
-                    "chcl3": ["191.620"],
-                    "ch2cl2": ["191.802"],
-                    "dmso": ["191.822"],
-                    "h2o": ["191.906"],
-                    "methanol": ["191.882"],
-                    "thf": ["191.664"],
-                    "toluene": ["191.290"],
-                    "gas": ["190.866"],
+                "pbe0": {
+                    "gas": 188.859355325,
+                    "acetone": 189.6196798,
+                    "chcl3": 189.4971041,
+                    "acetonitrile": 189.698041075,
+                    "ch2cl2": 189.318608125,
+                    "dmso": 189.68253637499998,
+                    "h2o": 189.65553119999998,
+                    "methanol": 189.409198575,
+                    "thf": 189.55889105,
+                    "toluene": 189.776394325,
+                },
+                "pbeh-3c": {
+                    "gas": 198.41611147499998,
+                    "acetone": 199.13367970000002,
+                    "chcl3": 199.054179875,
+                    "acetonitrile": 199.250248325,
+                    "ch2cl2": 198.845265825,
+                    "dmso": 199.185056825,
+                    "h2o": 199.2289907,
+                    "methanol": 198.917945675,
+                    "thf": 199.076003325,
+                    "toluene": 199.3931504,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 186.97419324999998,
+                    "acetone": 187.496073025,
+                    "chcl3": 187.45393565,
+                    "acetonitrile": 187.554538075,
+                    "ch2cl2": 187.31238564999998,
+                    "dmso": 187.469466275,
+                    "h2o": 187.57139320000002,
+                    "methanol": 187.344972675,
+                    "thf": 187.42200885,
+                    "toluene": 187.671731225,
+                },
+                "pbe0": {
+                    "gas": 189.169130675,
+                    "acetone": 189.816064175,
+                    "chcl3": 189.69082477499998,
+                    "acetonitrile": 189.860330875,
+                    "ch2cl2": 189.532330975,
+                    "dmso": 189.88587445000002,
+                    "h2o": 189.8368566,
+                    "methanol": 189.62332455,
+                    "thf": 189.76569125,
+                    "toluene": 189.94371412499999,
+                },
+                "pbeh-3c": {
+                    "gas": 198.7168509,
+                    "acetone": 199.3308802,
+                    "chcl3": 199.25125382500002,
+                    "acetonitrile": 199.41320919999998,
+                    "ch2cl2": 199.06108425,
+                    "dmso": 199.390014125,
+                    "h2o": 199.41478467500002,
+                    "methanol": 199.13192775,
+                    "thf": 199.28161922500001,
+                    "toluene": 199.562540575,
                 },
             },
             "tpss": {
-                "TMS": {
-                    "acetone": ["187.647"],
-                    "chcl3": ["187.407"],
-                    "ch2cl2": ["187.573"],
-                    "dmso": ["187.689"],
-                    "h2o": ["187.700"],
-                    "methanol": ["187.701"],
-                    "thf": ["187.513"],
-                    "toluene": ["187.103"],
-                    "gas": ["186.697"],
+                "tpss": {
+                    "gas": 185.410099625,
+                    "acetone": 185.99193982499997,
+                    "chcl3": 185.949648475,
+                    "acetonitrile": 186.0799505,
+                    "ch2cl2": 185.80363820000002,
+                    "dmso": 185.97415155,
+                    "h2o": 186.07484635,
+                    "methanol": 185.839592875,
+                    "thf": 185.9190184,
+                    "toluene": 186.17204557500003,
                 },
-                "DSS": {
-                    "acetone": ["189.361"],
-                    "chcl3": ["189.180"],
-                    "ch2cl2": ["189.351"],
-                    "dmso": ["189.364"],
-                    "h2o": ["189.443"],
-                    "methanol": ["189.423"],
-                    "thf": ["189.219"],
-                    "toluene": ["188.873"],
-                    "gas": ["188.488"],
+                "pbe0": {
+                    "gas": 187.626469575,
+                    "acetone": 188.34549135,
+                    "chcl3": 188.212218325,
+                    "acetonitrile": 188.413268225,
+                    "ch2cl2": 188.04820440000003,
+                    "dmso": 188.42875420000001,
+                    "h2o": 188.3724699,
+                    "methanol": 188.14698049999998,
+                    "thf": 188.2963985,
+                    "toluene": 188.46803717499998,
                 },
-            },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["190.235"],
-                    "chcl3": ["189.958"],
-                    "ch2cl2": ["190.144"],
-                    "dmso": ["190.290"],
-                    "h2o": ["190.295"],
-                    "methanol": ["190.288"],
-                    "thf": ["190.092"],
-                    "toluene": ["189.633"],
-                    "gas": ["189.177"],
-                },
-                "DSS": {
-                    "acetone": ["192.102"],
-                    "chcl3": ["191.907"],
-                    "ch2cl2": ["192.087"],
-                    "dmso": ["192.108"],
-                    "h2o": ["192.206"],
-                    "methanol": ["192.062"],
-                    "thf": ["191.970"],
-                    "toluene": ["191.588"],
-                    "gas": ["190.866"],
+                "pbeh-3c": {
+                    "gas": 197.27823677499998,
+                    "acetone": 197.953274625,
+                    "chcl3": 197.871683925,
+                    "acetonitrile": 198.0615831,
+                    "ch2cl2": 197.6764831,
+                    "dmso": 198.014841225,
+                    "h2o": 198.048432475,
+                    "methanol": 197.75143105,
+                    "thf": 197.905333025,
+                    "toluene": 198.186480775,
                 },
             },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["187.957"],
-                    "chcl3": ["187.708"],
-                    "ch2cl2": ["187.881"],
-                    "dmso": ["188.008"],
-                    "h2o": ["188.012"],
-                    "methanol": ["188.007"],
-                    "thf": ["187.832"],
-                    "toluene": ["187.404"],
-                    "gas": ["186.989"],
-                },
-                "DSS": {
-                    "acetone": ["189.665"],
-                    "chcl3": ["189.486"],
-                    "ch2cl2": ["189.655"],
-                    "dmso": ["189.669"],
-                    "h2o": ["189.761"],
-                    "methanol": ["189.625"],
-                    "thf": ["189.545"],
-                    "toluene": ["189.189"],
-                    "gas": ["188.488"],
-                },
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["188.783"],
-                    "chcl3": ["188.500"],
-                    "ch2cl2": ["188.692"],
-                    "dmso": ["187.554"],
-                    "h2o": ["188.851"],
-                    "methanol": ["188.839"],
-                    "thf": ["188.636"],
-                    "toluene": ["188.158"],
-                    "gas": ["187.671"],
-                },
-                "DSS": {
-                    "acetone": ["190.655"],
-                    "chcl3": ["190.446"],
-                    "ch2cl2": ["190.643"],
-                    "dmso": ["190.670"],
-                    "h2o": ["190.757"],
-                    "methanol": ["190.714"],
-                    "thf": ["190.516"],
-                    "toluene": ["190.115"],
-                    "gas": ["190.866"],
-                },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["186.481"],
-                    "chcl3": ["186.216"],
-                    "ch2cl2": ["186.397"],
-                    "dmso": ["186.530"],
-                    "h2o": ["186.544"],
-                    "methanol": ["186.534"],
-                    "thf": ["186.343"],
-                    "toluene": ["185.907"],
-                    "gas": ["185.463"],
-                },
-                "DSS": {
-                    "acetone": ["188.192"],
-                    "chcl3": ["188.001"],
-                    "ch2cl2": ["188.186"],
-                    "dmso": ["188.204"],
-                    "h2o": ["188.287"],
-                    "methanol": ["188.248"],
-                    "thf": ["188.066"],
-                    "toluene": ["187.693"],
-                    "gas": ["188.488"],
-                },
-            },
-        },
+        }
     }
     c_orca_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["187.333"],
-                    "chcl3": ["187.153"],
-                    "ch2cl2": ["187.261"],
-                    "dmso": ["187.383"],
-                    "h2o": ["187.459"],
-                    "methanol": ["187.350"],
-                    "thf": ["187.234"],
-                    "toluene": ["186.919"],
-                    "gas": ["186.373"],
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 188.604,
+                    "acetone": 189.7395,
+                    "chcl3": 189.5435,
+                    "acetonitrile": 189.77,
+                    "ch2cl2": 189.6625,
+                    "dmso": 189.8015,
+                    "h2o": 189.8495,
+                    "methanol": 189.77,
+                    "thf": 189.647,
+                    "toluene": 189.30400000000003,
                 },
-                "DSS": {
-                    "acetone": ["189.411"],
-                    "chcl3": ["189.270"],
-                    "ch2cl2": ["189.348"],
-                    "dmso": ["189.512"],
-                    "h2o": ["189.583"],
-                    "methanol": ["189.249"],
-                    "thf": ["189.365"],
-                    "toluene": ["189.075"],
-                    "gas": ["188.510"],
+                "pbe0": {
+                    "gas": 188.867,
+                    "acetone": 190.265,
+                    "chcl3": 190.02224999999999,
+                    "acetonitrile": 190.298,
+                    "ch2cl2": 190.16649999999998,
+                    "dmso": 190.33175,
+                    "h2o": 190.38799999999998,
+                    "methanol": 190.29875,
+                    "thf": 190.1445,
+                    "toluene": 189.73375,
+                },
+                "dsd-blyp": {
+                    "gas": 191.37099999999998,
+                    "acetone": 192.606,
+                    "chcl3": 192.385,
+                    "acetonitrile": 192.63599999999997,
+                    "ch2cl2": 192.51575000000003,
+                    "dmso": 192.66625000000002,
+                    "h2o": 192.7205,
+                    "methanol": 192.63524999999998,
+                    "thf": 192.4955,
+                    "toluene": 192.12275,
+                },
+                "wb97x": {
+                    "gas": 190.36075,
+                    "acetone": 191.689,
+                    "chcl3": 191.453,
+                    "acetonitrile": 191.72175000000001,
+                    "ch2cl2": 191.5935,
+                    "dmso": 191.753,
+                    "h2o": 191.8085,
+                    "methanol": 191.72150000000002,
+                    "thf": 191.57150000000001,
+                    "toluene": 191.17225,
+                },
+                "pbeh-3c": {
+                    "gas": 198.458,
+                    "acetone": 199.905,
+                    "chcl3": 199.649,
+                    "acetonitrile": 199.94,
+                    "ch2cl2": 199.8025,
+                    "dmso": 199.9715,
+                    "h2o": 200.0265,
+                    "methanol": 199.93900000000002,
+                    "thf": 199.7775,
+                    "toluene": 199.3395,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 188.908,
+                    "acetone": 190.0265,
+                    "chcl3": 189.83749999999998,
+                    "acetonitrile": 190.062,
+                    "ch2cl2": 189.954,
+                    "dmso": 190.103,
+                    "h2o": 190.07774999999998,
+                    "methanol": 190.0595,
+                    "thf": 189.9445,
+                    "toluene": 189.614,
+                },
+                "pbe0": {
+                    "gas": 189.18025,
+                    "acetone": 190.57025000000002,
+                    "chcl3": 190.33075,
+                    "acetonitrile": 190.60525,
+                    "ch2cl2": 190.47,
+                    "dmso": 190.65175,
+                    "h2o": 190.59925000000004,
+                    "methanol": 190.60775,
+                    "thf": 190.456,
+                    "toluene": 190.058,
+                },
+                "dsd-blyp": {
+                    "gas": 191.66199999999998,
+                    "acetone": 192.88025,
+                    "chcl3": 192.66174999999998,
+                    "acetonitrile": 192.915,
+                    "ch2cl2": 192.79025,
+                    "dmso": 192.95425,
+                    "h2o": 192.91275000000002,
+                    "methanol": 192.91250000000002,
+                    "thf": 192.77625,
+                    "toluene": 192.4135,
+                },
+                "wb97x": {
+                    "gas": 190.65525,
+                    "acetone": 191.97199999999998,
+                    "chcl3": 191.73825,
+                    "acetonitrile": 192.00725,
+                    "ch2cl2": 191.875,
+                    "dmso": 192.04950000000002,
+                    "h2o": 191.99675000000002,
+                    "methanol": 192.007,
+                    "thf": 191.86025,
+                    "toluene": 191.47125,
+                },
+                "pbeh-3c": {
+                    "gas": 198.752,
+                    "acetone": 200.196,
+                    "chcl3": 199.9445,
+                    "acetonitrile": 200.23250000000002,
+                    "ch2cl2": 200.0925,
+                    "dmso": 200.277,
+                    "h2o": 200.15925,
+                    "methanol": 200.23350000000002,
+                    "thf": 200.075,
+                    "toluene": 199.65050000000002,
                 },
             },
             "tpss": {
-                "TMS": {
-                    "acetone": ["188.595"],
-                    "chcl3": ["188.442"],
-                    "ch2cl2": ["188.535"],
-                    "dmso": ["188.639"],
-                    "h2o": ["188.714"],
-                    "methanol": ["188.608"],
-                    "thf": ["188.513"],
-                    "toluene": ["188.246"],
-                    "gas": ["187.761"],
+                "tpss": {
+                    "gas": 187.22,
+                    "acetone": 188.442,
+                    "chcl3": 188.214,
+                    "acetonitrile": 188.4745,
+                    "ch2cl2": 188.351,
+                    "dmso": 188.5115,
+                    "h2o": 188.58350000000002,
+                    "methanol": 188.473,
+                    "thf": 188.33950000000002,
+                    "toluene": 187.965,
                 },
-                "DSS": {
-                    "acetone": ["190.490"],
-                    "chcl3": ["190.362"],
-                    "ch2cl2": ["190.440"],
-                    "dmso": ["190.582"],
-                    "h2o": ["190.654"],
-                    "methanol": ["190.323"],
-                    "thf": ["190.451"],
-                    "toluene": ["190.212"],
-                    "gas": ["188.516"],
+                "pbe0": {
+                    "gas": 187.5725,
+                    "acetone": 188.99225,
+                    "chcl3": 188.73424999999997,
+                    "acetonitrile": 189.0295,
+                    "ch2cl2": 188.8875,
+                    "dmso": 189.06875,
+                    "h2o": 189.14175,
+                    "methanol": 189.0275,
+                    "thf": 188.8665,
+                    "toluene": 188.4305,
                 },
-            },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["187.699"],
-                    "chcl3": ["187.527"],
-                    "ch2cl2": ["187.626"],
-                    "dmso": ["187.764"],
-                    "h2o": ["187.847"],
-                    "methanol": ["187.724"],
-                    "thf": ["187.609"],
-                    "toluene": ["187.316"],
-                    "gas": ["186.704"],
+                "dsd-blyp": {
+                    "gas": 190.06825,
+                    "acetone": 191.39,
+                    "chcl3": 191.15425,
+                    "acetonitrile": 191.42600000000002,
+                    "ch2cl2": 191.29475000000002,
+                    "dmso": 191.461,
+                    "h2o": 191.53225,
+                    "methanol": 191.4225,
+                    "thf": 191.27499999999998,
+                    "toluene": 190.87675000000002,
                 },
-                "DSS": {
-                    "acetone": ["189.731"],
-                    "chcl3": ["189.573"],
-                    "ch2cl2": ["189.667"],
-                    "dmso": ["189.812"],
-                    "h2o": ["189.912"],
-                    "methanol": ["189.761"],
-                    "thf": ["189.671"],
-                    "toluene": ["189.372"],
-                    "gas": ["188.815"],
+                "wb97x": {
+                    "gas": 189.04575,
+                    "acetone": 190.45225000000002,
+                    "chcl3": 190.20074999999997,
+                    "acetonitrile": 190.4885,
+                    "ch2cl2": 190.35025000000002,
+                    "dmso": 190.52525,
+                    "h2o": 190.5975,
+                    "methanol": 190.4855,
+                    "thf": 190.32899999999998,
+                    "toluene": 189.904,
                 },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["188.961"],
-                    "chcl3": ["188.813"],
-                    "ch2cl2": ["188.897"],
-                    "dmso": ["189.019"],
-                    "h2o": ["189.100"],
-                    "methanol": ["188.981"],
-                    "thf": ["188.884"],
-                    "toluene": ["188.638"],
-                    "gas": ["188.089"],
-                },
-                "DSS": {
-                    "acetone": ["190.792"],
-                    "chcl3": ["190.653"],
-                    "ch2cl2": ["190.737"],
-                    "dmso": ["190.861"],
-                    "h2o": ["190.957"],
-                    "methanol": ["190.800"],
-                    "thf": ["190.745"],
-                    "toluene": ["190.490"],
-                    "gas": ["190.037"],
+                "pbeh-3c": {
+                    "gas": 197.184,
+                    "acetone": 198.7195,
+                    "chcl3": 198.449,
+                    "acetonitrile": 198.75799999999998,
+                    "ch2cl2": 198.611,
+                    "dmso": 198.7955,
+                    "h2o": 198.8655,
+                    "methanol": 198.755,
+                    "thf": 198.587,
+                    "toluene": 198.1245,
                 },
             },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMS": {
-                    "acetone": ["186.129"],
-                    "chcl3": ["185.938"],
-                    "ch2cl2": ["186.051"],
-                    "dmso": ["186.190"],
-                    "h2o": ["186.267"],
-                    "methanol": ["186.151"],
-                    "thf": ["186.027"],
-                    "toluene": ["185.693"],
-                    "gas": ["185.081"],
-                },
-                "DSS": {
-                    "acetone": ["187.985"],
-                    "chcl3": ["187.816"],
-                    "ch2cl2": ["187.897"],
-                    "dmso": ["188.044"],
-                    "h2o": ["188.171"],
-                    "methanol": ["188.012"],
-                    "thf": ["187.876"],
-                    "toluene": ["186.552"],
-                    "gas": ["187.040"],
-                },
-            },
-            "tpss": {
-                "TMS": {
-                    "acetone": ["187.408"],
-                    "chcl3": ["187.246"],
-                    "ch2cl2": ["187.342"],
-                    "dmso": ["187.464"],
-                    "h2o": ["187.541"],
-                    "methanol": ["187.428"],
-                    "thf": ["187.324"],
-                    "toluene": ["187.039"],
-                    "gas": ["186.493"],
-                },
-                "DSS": {
-                    "acetone": ["189.091"],
-                    "chcl3": ["188.931"],
-                    "ch2cl2": ["189.014"],
-                    "dmso": ["189.143"],
-                    "h2o": ["189.270"],
-                    "methanol": ["189.107"],
-                    "thf": ["188.991"],
-                    "toluene": ["187.788"],
-                    "gas": ["188.298"],
-                },
-            },
-        },
+        }
     }
-    # 19F
     f_tm_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["181.52"],
-                    "chcl3": ["182.57"],
-                    "ch2cl2": ["182.38"],
-                    "dmso": ["182.48"],
-                    "h2o": ["181.76"],
-                    "methanol": ["181.04"],
-                    "thf": ["181.25"],
-                    "toluene": ["180.84"],
-                    "gas": ["168.09"],
-                }
+        "CFCl3": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 163.5665883,
+                    "acetone": 165.9168679,
+                    "chcl3": 165.043061,
+                    "acetonitrile": 166.377831,
+                    "ch2cl2": 164.776383,
+                    "dmso": 166.1839641,
+                    "h2o": 166.880495,
+                    "methanol": 165.4364879,
+                    "thf": 165.7384153,
+                    "toluene": 165.7812123,
+                },
+                "pbe0": {
+                    "gas": 179.4820255,
+                    "acetone": 181.9743764,
+                    "chcl3": 181.1338758,
+                    "acetonitrile": 182.4438224,
+                    "ch2cl2": 180.8751895,
+                    "dmso": 182.2224636,
+                    "h2o": 182.9958356,
+                    "methanol": 181.5031528,
+                    "thf": 181.7669891,
+                    "toluene": 181.7963177,
+                },
+                "pbeh-3c": {
+                    "gas": 225.045234,
+                    "acetone": 226.6335916,
+                    "chcl3": 226.0133192,
+                    "acetonitrile": 226.9371636,
+                    "ch2cl2": 225.8300352,
+                    "dmso": 226.8061873,
+                    "h2o": 227.4000142,
+                    "methanol": 226.3012569,
+                    "thf": 226.5247654,
+                    "toluene": 226.555523,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 150.4514566,
+                    "acetone": 151.5612999,
+                    "chcl3": 150.5819485,
+                    "acetonitrile": 151.9884593,
+                    "ch2cl2": 150.2953968,
+                    "dmso": 151.8818575,
+                    "h2o": 151.6179136,
+                    "methanol": 151.0439011,
+                    "thf": 151.4207377,
+                    "toluene": 151.4686522,
+                },
+                "pbe0": {
+                    "gas": 167.7783433,
+                    "acetone": 169.09491,
+                    "chcl3": 168.1354478,
+                    "acetonitrile": 169.5416871,
+                    "ch2cl2": 167.8558489,
+                    "dmso": 169.3950732,
+                    "h2o": 169.2178304,
+                    "methanol": 168.5860848,
+                    "thf": 168.9136991,
+                    "toluene": 168.9347931,
+                },
+                "pbeh-3c": {
+                    "gas": 213.6651892,
+                    "acetone": 214.1284506,
+                    "chcl3": 213.4293417,
+                    "acetonitrile": 214.4297108,
+                    "ch2cl2": 213.2298905,
+                    "dmso": 214.366451,
+                    "h2o": 214.1162368,
+                    "methanol": 213.76845,
+                    "thf": 214.0512078,
+                    "toluene": 214.0924969,
+                },
             },
             "tpss": {
-                "CFCl3": {
-                    "acetone": ["165.40"],
-                    "chcl3": ["166.49"],
-                    "ch2cl2": ["166.29"],
-                    "dmso": ["166.35"],
-                    "h2o": ["165.63"],
-                    "methanol": ["164.92"],
-                    "thf": ["165.15"],
-                    "toluene": ["164.81"],
-                    "gas": ["152.16"],
-                }
+                "tpss": {
+                    "gas": 146.4091676,
+                    "acetone": 148.7113398,
+                    "chcl3": 147.7715256,
+                    "acetonitrile": 149.1854535,
+                    "ch2cl2": 147.4708159,
+                    "dmso": 148.9781692,
+                    "h2o": 148.8407317,
+                    "methanol": 148.1815132,
+                    "thf": 148.5140784,
+                    "toluene": 148.6001306,
+                },
+                "pbe0": {
+                    "gas": 163.4654205,
+                    "acetone": 165.9356023,
+                    "chcl3": 165.0269644,
+                    "acetonitrile": 166.4188044,
+                    "ch2cl2": 164.7336009,
+                    "dmso": 166.1830401,
+                    "h2o": 166.0858984,
+                    "methanol": 165.4145633,
+                    "thf": 165.7038144,
+                    "toluene": 165.7726604,
+                },
+                "pbeh-3c": {
+                    "gas": 209.8752809,
+                    "acetone": 211.4025693,
+                    "chcl3": 210.7286529,
+                    "acetonitrile": 211.7120494,
+                    "ch2cl2": 210.5166504,
+                    "dmso": 211.5990015,
+                    "h2o": 211.4250312,
+                    "methanol": 211.0321396,
+                    "thf": 211.2798891,
+                    "toluene": 211.3499046,
+                },
             },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["169.13"],
-                    "chcl3": ["170.11"],
-                    "ch2cl2": ["169.97"],
-                    "dmso": ["170.09"],
-                    "h2o": ["168.87"],
-                    "methanol": ["168.24"],
-                    "thf": ["168.84"],
-                    "toluene": ["168.21"],
-                    "gas": ["155.60"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["151.51"],
-                    "chcl3": ["152.57"],
-                    "ch2cl2": ["152.38"],
-                    "dmso": ["152.45"],
-                    "h2o": ["151.25"],
-                    "methanol": ["150.62"],
-                    "thf": ["151.26"],
-                    "toluene": ["150.74"],
-                    "gas": ["138.28"],
-                }
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["165.42"],
-                    "chcl3": ["166.38"],
-                    "ch2cl2": ["166.26"],
-                    "dmso": ["166.36"],
-                    "h2o": ["165.55"],
-                    "methanol": ["164.95"],
-                    "thf": ["165.10"],
-                    "toluene": ["164.51"],
-                    "gas": ["151.77"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["148.14"],
-                    "chcl3": ["149.16"],
-                    "ch2cl2": ["149.00"],
-                    "dmso": ["149.08"],
-                    "h2o": ["148.27"],
-                    "methanol": ["147.67"],
-                    "thf": ["147.85"],
-                    "toluene": ["147.35"],
-                    "gas": ["151.77"],
-                }
-            },
-        },
+        }
     }
-    f_orca_shieldings_old = {
-        "pbeh-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["171.51"],
-                    "chcl3": ["172.63"],
-                    "ch2cl2": ["172.37"],
-                    "dmso": ["172.47"],
-                    "h2o": ["171.78"],
-                    "methanol": ["171.00"],
-                    "thf": ["171.31"],
-                    "toluene": ["170.95"],
-                    "gas": ["164.70"],
-                }
+    f_orca_shieldings = {
+        "CFCl3": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 166.028,
+                    "acetone": 167.858,
+                    "chcl3": 167.569,
+                    "acetonitrile": 167.92,
+                    "ch2cl2": 167.732,
+                    "dmso": 167.992,
+                    "h2o": 168.239,
+                    "methanol": 167.889,
+                    "thf": 167.737,
+                    "toluene": 167.278,
+                },
+                "pbe0": {
+                    "gas": 178.99,
+                    "acetone": 181.086,
+                    "chcl3": 180.741,
+                    "acetonitrile": 181.154,
+                    "ch2cl2": 180.939,
+                    "dmso": 181.224,
+                    "h2o": 181.464,
+                    "methanol": 181.123,
+                    "thf": 180.934,
+                    "toluene": 180.377,
+                },
+                "dsd-blyp": {
+                    "gas": 225.542,
+                    "acetone": 227.877,
+                    "chcl3": 227.478,
+                    "acetonitrile": 227.949,
+                    "ch2cl2": 227.712,
+                    "dmso": 228.007,
+                    "h2o": 228.213,
+                    "methanol": 227.919,
+                    "thf": 227.691,
+                    "toluene": 227.033,
+                },
+                "wb97x": {
+                    "gas": 193.433,
+                    "acetone": 195.381,
+                    "chcl3": 195.059,
+                    "acetonitrile": 195.445,
+                    "ch2cl2": 195.245,
+                    "dmso": 195.508,
+                    "h2o": 195.733,
+                    "methanol": 195.415,
+                    "thf": 195.239,
+                    "toluene": 194.719,
+                },
+                "pbeh-3c": {
+                    "gas": 224.834,
+                    "acetone": 226.308,
+                    "chcl3": 226.076,
+                    "acetonitrile": 226.36,
+                    "ch2cl2": 226.207,
+                    "dmso": 226.424,
+                    "h2o": 226.639,
+                    "methanol": 226.333,
+                    "thf": 226.215,
+                    "toluene": 225.843,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 153.325,
+                    "acetone": 153.259,
+                    "chcl3": 152.987,
+                    "acetonitrile": 153.326,
+                    "ch2cl2": 153.137,
+                    "dmso": 153.425,
+                    "h2o": 153.729,
+                    "methanol": 153.292,
+                    "thf": 153.16,
+                    "toluene": 152.731,
+                },
+                "pbe0": {
+                    "gas": 167.245,
+                    "acetone": 167.447,
+                    "chcl3": 167.121,
+                    "acetonitrile": 167.52,
+                    "ch2cl2": 167.31,
+                    "dmso": 167.626,
+                    "h2o": 167.92,
+                    "methanol": 167.486,
+                    "thf": 167.322,
+                    "toluene": 166.785,
+                },
+                "dsd-blyp": {
+                    "gas": 216.287,
+                    "acetone": 217.144,
+                    "chcl3": 216.726,
+                    "acetonitrile": 217.223,
+                    "ch2cl2": 216.969,
+                    "dmso": 217.304,
+                    "h2o": 217.555,
+                    "methanol": 217.19,
+                    "thf": 216.957,
+                    "toluene": 216.272,
+                },
+                "wb97x": {
+                    "gas": 182.767,
+                    "acetone": 182.921,
+                    "chcl3": 182.602,
+                    "acetonitrile": 182.99,
+                    "ch2cl2": 182.783,
+                    "dmso": 183.077,
+                    "h2o": 183.351,
+                    "methanol": 182.957,
+                    "thf": 182.792,
+                    "toluene": 182.279,
+                },
+                "pbeh-3c": {
+                    "gas": 213.421,
+                    "acetone": 213.215,
+                    "chcl3": 212.997,
+                    "acetonitrile": 213.271,
+                    "ch2cl2": 213.116,
+                    "dmso": 213.36,
+                    "h2o": 213.627,
+                    "methanol": 213.241,
+                    "thf": 213.14,
+                    "toluene": 212.796,
+                },
             },
             "tpss": {
-                "CFCl3": {
-                    "acetone": ["159.20"],
-                    "chcl3": ["160.37"],
-                    "ch2cl2": ["160.08"],
-                    "dmso": ["160.15"],
-                    "h2o": ["159.46"],
-                    "methanol": ["158.69"],
-                    "thf": ["159.03"],
-                    "toluene": ["158.77"],
-                    "gas": ["153.18"],
-                }
+                "tpss": {
+                    "gas": 148.387,
+                    "acetone": 149.573,
+                    "chcl3": 149.247,
+                    "acetonitrile": 149.647,
+                    "ch2cl2": 149.43,
+                    "dmso": 149.748,
+                    "h2o": 150.066,
+                    "methanol": 149.609,
+                    "thf": 149.446,
+                    "toluene": 148.927,
+                },
+                "pbe0": {
+                    "gas": 162.075,
+                    "acetone": 163.638,
+                    "chcl3": 163.239,
+                    "acetonitrile": 163.71,
+                    "ch2cl2": 163.472,
+                    "dmso": 163.807,
+                    "h2o": 164.125,
+                    "methanol": 163.671,
+                    "thf": 163.476,
+                    "toluene": 162.835,
+                },
+                "dsd-blyp": {
+                    "gas": 211.635,
+                    "acetone": 213.66,
+                    "chcl3": 213.199,
+                    "acetonitrile": 213.746,
+                    "ch2cl2": 213.469,
+                    "dmso": 213.828,
+                    "h2o": 214.092,
+                    "methanol": 213.71,
+                    "thf": 213.451,
+                    "toluene": 212.692,
+                },
+                "wb97x": {
+                    "gas": 177.986,
+                    "acetone": 179.452,
+                    "chcl3": 179.093,
+                    "acetonitrile": 179.528,
+                    "ch2cl2": 179.299,
+                    "dmso": 179.616,
+                    "h2o": 179.902,
+                    "methanol": 179.491,
+                    "thf": 179.302,
+                    "toluene": 178.721,
+                },
+                "pbeh-3c": {
+                    "gas": 208.73,
+                    "acetone": 209.687,
+                    "chcl3": 209.429,
+                    "acetonitrile": 209.749,
+                    "ch2cl2": 209.573,
+                    "dmso": 209.825,
+                    "h2o": 210.102,
+                    "methanol": 209.716,
+                    "thf": 209.592,
+                    "toluene": 209.176,
+                },
             },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["171.54"],
-                    "chcl3": ["172.65"],
-                    "ch2cl2": ["172.40"],
-                    "dmso": ["172.50"],
-                    "h2o": ["171.81"],
-                    "methanol": ["171.03"],
-                    "thf": ["171.33"],
-                    "toluene": ["172.42"],
-                    "gas": ["151.38"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["159.15"],
-                    "chcl3": ["160.32"],
-                    "ch2cl2": ["160.03"],
-                    "dmso": ["160.10"],
-                    "h2o": ["159.40"],
-                    "methanol": ["158.63"],
-                    "thf": ["158.98"],
-                    "toluene": ["160.03"],
-                    "gas": ["138.67"],
-                }
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["171.54"],
-                    "chcl3": ["172.65"],
-                    "ch2cl2": ["172.40"],
-                    "dmso": ["172.50"],
-                    "h2o": ["171.81"],
-                    "methanol": ["171.03"],
-                    "thf": ["171.33"],
-                    "toluene": ["170.97"],
-                    "gas": ["138.67"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["159.15"],
-                    "chcl3": ["160.32"],
-                    "ch2cl2": ["160.03"],
-                    "dmso": ["160.10"],
-                    "h2o": ["159.40"],
-                    "methanol": ["158.63"],
-                    "thf": ["158.98"],
-                    "toluene": ["158.72"],
-                    "gas": ["134.81"],
-                }
-            },
-        },
+        }
     }
-    f_orca_shieldings_new = {
-        "pbeh-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["180.16"],
-                    "chcl3": ["177.87"],
-                    "ch2cl2": ["178.81"],
-                    "dmso": ["179.48"],
-                    "h2o": ["180.45"],
-                    "methanol": ["180.80"],
-                    "thf": ["179.70"],
-                    "toluene": ["178.06"],
-                    "gas": ["188.02"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["168.35"],
-                    "chcl3": ["166.10"],
-                    "ch2cl2": ["167.02"],
-                    "dmso": ["167.67"],
-                    "h2o": ["168.65"],
-                    "methanol": ["168.99"],
-                    "thf": ["167.92"],
-                    "toluene": ["166.35"],
-                    "gas": ["176.45"],
-                }
-            },
-        },
-        "b97-3c": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["166.76"],
-                    "chcl3": ["164.46"],
-                    "ch2cl2": ["165.41"],
-                    "dmso": ["166.12"],
-                    "h2o": ["167.15"],
-                    "methanol": ["167.40"],
-                    "thf": ["166.31"],
-                    "toluene": ["164.67"],
-                    "gas": ["174.68"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["153.68"],
-                    "chcl3": ["151.45"],
-                    "ch2cl2": ["152.36"],
-                    "dmso": ["153.04"],
-                    "h2o": ["154.09"],
-                    "methanol": ["154.32"],
-                    "thf": ["153.28"],
-                    "toluene": ["151.74"],
-                    "gas": ["161.97"],
-                }
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "CFCl3": {
-                    "acetone": ["163.16"],
-                    "chcl3": ["160.80"],
-                    "ch2cl2": ["161.79"],
-                    "dmso": ["162.53"],
-                    "h2o": ["163.57"],
-                    "methanol": ["163.81"],
-                    "thf": ["162.68"],
-                    "toluene": ["160.91"],
-                    "gas": ["170.71"],
-                }
-            },
-            "tpss": {
-                "CFCl3": {
-                    "acetone": ["150.23"],
-                    "chcl3": ["147.93"],
-                    "ch2cl2": ["148.88"],
-                    "dmso": ["149.60"],
-                    "h2o": ["150.66"],
-                    "methanol": ["150.88"],
-                    "thf": ["149.79"],
-                    "toluene": ["148.12"],
-                    "gas": ["158.11"],
-                }
-            },
-        },
-    }
-
-    # 31P
     p_tm_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["292.9"],
-                    "chcl3": ["291.9"],
-                    "ch2cl2": ["291.7"],
-                    "dmso": ["291.7"],
-                    "h2o": ["292.4"],
-                    "methanol": ["291.3"],
-                    "thf": ["292.9"],
+        "PH3": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 560.9783608,
+                    "acetone": 559.5567974,
+                    "chcl3": 555.7297268,
+                    "acetonitrile": 558.7420853,
+                    "ch2cl2": 555.9207578,
+                    "dmso": 559.0317956,
+                    "h2o": 551.9868157,
+                    "methanol": 557.7229598,
+                    "thf": 559.4070044,
+                    "toluene": 558.9538264,
                 },
-                "PH3": {"toluene": ["328.1"], "gas": ["308.8"]},
+                "pbe0": {
+                    "gas": 573.7889709,
+                    "acetone": 572.6807308,
+                    "chcl3": 568.6200619,
+                    "acetonitrile": 572.0156003,
+                    "ch2cl2": 568.6775273,
+                    "dmso": 572.2984368,
+                    "h2o": 564.8512663,
+                    "methanol": 570.6948985,
+                    "thf": 572.4491708,
+                    "toluene": 572.2945282,
+                },
+                "pbeh-3c": {
+                    "gas": 622.6149401,
+                    "acetone": 624.221383,
+                    "chcl3": 622.2460822,
+                    "acetonitrile": 624.0839458,
+                    "ch2cl2": 622.3660073,
+                    "dmso": 623.8685076,
+                    "h2o": 622.54767,
+                    "methanol": 623.1569748,
+                    "thf": 623.7253948,
+                    "toluene": 623.2733775,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 559.5296772,
+                    "acetone": 557.5438599,
+                    "chcl3": 553.7653249,
+                    "acetonitrile": 556.735552,
+                    "ch2cl2": 554.1613395,
+                    "dmso": 557.010476,
+                    "h2o": 550.1185847,
+                    "methanol": 555.82703,
+                    "thf": 557.2207586,
+                    "toluene": 556.8427805,
+                },
+                "pbe0": {
+                    "gas": 572.4232552,
+                    "acetone": 570.7398164,
+                    "chcl3": 566.7271447,
+                    "acetonitrile": 570.0779914,
+                    "ch2cl2": 566.9826221,
+                    "dmso": 570.3456887,
+                    "h2o": 563.05667,
+                    "methanol": 568.8622417,
+                    "thf": 570.3305746,
+                    "toluene": 570.2507738,
+                },
+                "pbeh-3c": {
+                    "gas": 621.2286124,
+                    "acetone": 622.356702,
+                    "chcl3": 620.3365742,
+                    "acetonitrile": 622.2263079,
+                    "ch2cl2": 620.6570087,
+                    "dmso": 621.9912341,
+                    "h2o": 620.7021951,
+                    "methanol": 621.3567408,
+                    "thf": 621.7091401,
+                    "toluene": 621.3088355,
+                },
             },
             "tpss": {
-                "TMP": {
-                    "acetone": ["297.9"],
-                    "chcl3": ["296.9"],
-                    "ch2cl2": ["296.7"],
-                    "dmso": ["296.6"],
-                    "h2o": ["297.6"],
-                    "methanol": ["296.3"],
-                    "thf": ["297.9"],
+                "tpss": {
+                    "gas": 558.1589032,
+                    "acetone": 556.5475548,
+                    "chcl3": 553.3273579,
+                    "acetonitrile": 555.6559443,
+                    "ch2cl2": 553.600544,
+                    "dmso": 556.0983125,
+                    "h2o": 548.970911,
+                    "methanol": 555.4535832,
+                    "thf": 556.3191064,
+                    "toluene": 555.9299261,
                 },
-                "PH3": {"toluene": ["315.2"], "gas": ["295.8"]},
+                "pbe0": {
+                    "gas": 571.012794,
+                    "acetone": 569.7250563,
+                    "chcl3": 566.2936179,
+                    "acetonitrile": 568.9923465,
+                    "ch2cl2": 566.4237381,
+                    "dmso": 569.4236946,
+                    "h2o": 561.898531,
+                    "methanol": 568.4989088,
+                    "thf": 569.4140377,
+                    "toluene": 569.3191735,
+                },
+                "pbeh-3c": {
+                    "gas": 620.0674752,
+                    "acetone": 621.5116584,
+                    "chcl3": 619.9397925,
+                    "acetonitrile": 621.2898165,
+                    "ch2cl2": 620.15928,
+                    "dmso": 621.2154327,
+                    "h2o": 619.7280828,
+                    "methanol": 621.0126668,
+                    "thf": 620.9449236,
+                    "toluene": 620.5363442,
+                },
             },
         },
-        "b97-3c": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["285.9"],
-                    "chcl3": ["284.7"],
-                    "ch2cl2": ["284.5"],
-                    "dmso": ["284.1"],
-                    "h2o": ["285.4"],
-                    "methanol": ["284.5"],
-                    "thf": ["285.7"],
+        "TMP": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 281.6302978,
+                    "acetone": 265.4354914,
+                    "chcl3": 257.5409613,
+                    "acetonitrile": 263.2430698,
+                    "ch2cl2": 257.0543221,
+                    "dmso": 262.8752182,
+                    "h2o": 242.4838211,
+                    "methanol": 245.6431135,
+                    "thf": 266.7188352,
+                    "toluene": 269.0597797,
                 },
-                "PH3": {"toluene": ["326.2"], "gas": ["306.6"]},
+                "pbe0": {
+                    "gas": 277.8252556,
+                    "acetone": 261.5502528,
+                    "chcl3": 254.1109855,
+                    "acetonitrile": 259.5059377,
+                    "ch2cl2": 253.6358478,
+                    "dmso": 258.7821425,
+                    "h2o": 239.5329333,
+                    "methanol": 242.1687948,
+                    "thf": 262.8378646,
+                    "toluene": 265.4050199,
+                },
+                "pbeh-3c": {
+                    "gas": 390.6073841,
+                    "acetone": 378.6668397,
+                    "chcl3": 373.2000393,
+                    "acetonitrile": 377.1343123,
+                    "ch2cl2": 372.9163524,
+                    "dmso": 376.6203422,
+                    "h2o": 362.7163813,
+                    "methanol": 364.8220379,
+                    "thf": 379.5051748,
+                    "toluene": 381.2789752,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 276.8654211,
+                    "acetone": 259.8829696,
+                    "chcl3": 251.5648819,
+                    "acetonitrile": 257.7225804,
+                    "ch2cl2": 251.0880934,
+                    "dmso": 256.90761,
+                    "h2o": 234.4800595,
+                    "methanol": 237.4630709,
+                    "thf": 261.291204,
+                    "toluene": 263.9827571,
+                },
+                "pbe0": {
+                    "gas": 273.0911933,
+                    "acetone": 256.1507446,
+                    "chcl3": 248.2072561,
+                    "acetonitrile": 254.0571117,
+                    "ch2cl2": 247.7513367,
+                    "dmso": 253.0100842,
+                    "h2o": 231.7425518,
+                    "methanol": 234.1695454,
+                    "thf": 257.4644157,
+                    "toluene": 260.3717755,
+                },
+                "pbeh-3c": {
+                    "gas": 386.2437698,
+                    "acetone": 373.8145109,
+                    "chcl3": 368.1719462,
+                    "acetonitrile": 372.350904,
+                    "ch2cl2": 367.8934403,
+                    "dmso": 371.4995766,
+                    "h2o": 355.9965281,
+                    "methanol": 358.0517851,
+                    "thf": 374.7716841,
+                    "toluene": 376.8283779,
+                },
             },
             "tpss": {
-                "TMP": {
-                    "acetone": ["290.8"],
-                    "chcl3": ["289.6"],
-                    "ch2cl2": ["289.4"],
-                    "dmso": ["288.9"],
-                    "h2o": ["290.5"],
-                    "methanol": ["289.5"],
-                    "thf": ["290.6"],
+                "tpss": {
+                    "gas": 278.0447826,
+                    "acetone": 261.4382678,
+                    "chcl3": 253.5317417,
+                    "acetonitrile": 259.5831076,
+                    "ch2cl2": 253.0735218,
+                    "dmso": 258.8205488,
+                    "h2o": 236.9938311,
+                    "methanol": 240.0596152,
+                    "thf": 262.646474,
+                    "toluene": 265.5482099,
                 },
-                "PH3": {"toluene": ["292.6"], "gas": ["313.2"]},
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["289.0"],
-                    "chcl3": ["287.9"],
-                    "ch2cl2": ["288.4"],
-                    "dmso": ["287.7"],
-                    "h2o": ["289.0"],
-                    "methanol": ["288.2"],
-                    "thf": ["288.6"],
+                "pbe0": {
+                    "gas": 274.1582231,
+                    "acetone": 257.5976215,
+                    "chcl3": 250.0455696,
+                    "acetonitrile": 255.8739799,
+                    "ch2cl2": 249.6032437,
+                    "dmso": 254.7109046,
+                    "h2o": 234.1066151,
+                    "methanol": 236.6658834,
+                    "thf": 258.6914971,
+                    "toluene": 261.8410368,
                 },
-                "PH3": {"toluene": ["325.2"], "gas": ["305.7"]},
-            },
-            "tpss": {
-                "TMP": {
-                    "acetone": ["293.7"],
-                    "chcl3": ["292.8"],
-                    "ch2cl2": ["293.3"],
-                    "dmso": ["292.5"],
-                    "h2o": ["294.1"],
-                    "methanol": ["293.1"],
-                    "thf": ["294.4"],
+                "pbeh-3c": {
+                    "gas": 387.4697022,
+                    "acetone": 375.2569197,
+                    "chcl3": 369.9533245,
+                    "acetonitrile": 374.0256406,
+                    "ch2cl2": 369.6688695,
+                    "dmso": 373.1520781,
+                    "h2o": 358.1827766,
+                    "methanol": 360.3168296,
+                    "thf": 376.0015788,
+                    "toluene": 378.3153047,
                 },
-                "PH3": {"toluene": ["312.2"], "gas": ["292.6"]},
             },
         },
     }
     p_orca_shieldings = {
-        "pbeh-3c": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["307.9"],
-                    "chcl3": ["306.6"],
-                    "ch2cl2": ["306.4"],
-                    "dmso": ["306.7"],
-                    "h2o": ["307.0"],
-                    "methanol": ["306.3"],
-                    "thf": ["307.7"],
+        "PH3": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 578.49,
+                    "acetone": 577.53,
+                    "chcl3": 577.773,
+                    "acetonitrile": 577.631,
+                    "ch2cl2": 577.63,
+                    "dmso": 577.688,
+                    "h2o": 577.764,
+                    "methanol": 577.506,
+                    "thf": 577.671,
+                    "toluene": 577.946,
                 },
-                "PH3": {"toluene": ["338.4"], "gas": ["316.6"]},
+                "pbe0": {
+                    "gas": 573.639,
+                    "acetone": 573.637,
+                    "chcl3": 573.71,
+                    "acetonitrile": 573.764,
+                    "ch2cl2": 573.67,
+                    "dmso": 573.829,
+                    "h2o": 573.914,
+                    "methanol": 573.632,
+                    "thf": 573.688,
+                    "toluene": 573.665,
+                },
+                "dsd-blyp": {
+                    "gas": 569.431,
+                    "acetone": 567.575,
+                    "chcl3": 567.994,
+                    "acetonitrile": 567.65,
+                    "ch2cl2": 567.746,
+                    "dmso": 567.695,
+                    "h2o": 567.745,
+                    "methanol": 567.531,
+                    "thf": 567.809,
+                    "toluene": 568.372,
+                },
+                "wb97x": {
+                    "gas": 568.27,
+                    "acetone": 568.185,
+                    "chcl3": 568.261,
+                    "acetonitrile": 568.31,
+                    "ch2cl2": 568.218,
+                    "dmso": 568.375,
+                    "h2o": 568.459,
+                    "methanol": 568.18,
+                    "thf": 568.236,
+                    "toluene": 568.231,
+                },
+                "pbeh-3c": {
+                    "gas": 622.505,
+                    "acetone": 626.377,
+                    "chcl3": 625.536,
+                    "acetonitrile": 626.609,
+                    "ch2cl2": 626.042,
+                    "dmso": 626.709,
+                    "h2o": 626.85,
+                    "methanol": 626.48,
+                    "thf": 625.933,
+                    "toluene": 624.513,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 574.673,
+                    "acetone": 575.587,
+                    "chcl3": 575.672,
+                    "acetonitrile": 575.6,
+                    "ch2cl2": 575.619,
+                    "dmso": 575.662,
+                    "h2o": 575.948,
+                    "methanol": 575.57,
+                    "thf": 575.668,
+                    "toluene": 575.8,
+                },
+                "pbe0": {
+                    "gas": 569.721,
+                    "acetone": 571.667,
+                    "chcl3": 571.577,
+                    "acetonitrile": 571.703,
+                    "ch2cl2": 571.631,
+                    "dmso": 571.774,
+                    "h2o": 572.075,
+                    "methanol": 571.67,
+                    "thf": 571.656,
+                    "toluene": 571.48,
+                },
+                "dsd-blyp": {
+                    "gas": 565.936,
+                    "acetone": 565.88,
+                    "chcl3": 566.179,
+                    "acetonitrile": 565.866,
+                    "ch2cl2": 566.012,
+                    "dmso": 565.915,
+                    "h2o": 566.166,
+                    "methanol": 565.843,
+                    "thf": 566.084,
+                    "toluene": 566.506,
+                },
+                "wb97x": {
+                    "gas": 564.429,
+                    "acetone": 566.244,
+                    "chcl3": 566.161,
+                    "acetonitrile": 566.279,
+                    "ch2cl2": 566.206,
+                    "dmso": 566.349,
+                    "h2o": 566.646,
+                    "methanol": 566.247,
+                    "thf": 566.233,
+                    "toluene": 566.086,
+                },
+                "pbeh-3c": {
+                    "gas": 618.99,
+                    "acetone": 624.483,
+                    "chcl3": 623.499,
+                    "acetonitrile": 624.639,
+                    "ch2cl2": 624.087,
+                    "dmso": 624.744,
+                    "h2o": 625.072,
+                    "methanol": 624.593,
+                    "thf": 623.983,
+                    "toluene": 622.448,
+                },
             },
             "tpss": {
-                "TMP": {
-                    "acetone": ["318.8"],
-                    "chcl3": ["317.4"],
-                    "ch2cl2": ["317.2"],
-                    "dmso": ["317.4"],
-                    "h2o": ["317.8"],
-                    "methanol": ["317.1"],
-                    "thf": ["318.5"],
+                "tpss": {
+                    "gas": 574.839,
+                    "acetone": 574.09,
+                    "chcl3": 574.267,
+                    "acetonitrile": 574.11,
+                    "ch2cl2": 574.167,
+                    "dmso": 574.166,
+                    "h2o": 574.435,
+                    "methanol": 574.084,
+                    "thf": 574.22,
+                    "toluene": 574.478,
                 },
-                "PH3": {"toluene": ["343.5"], "gas": ["322.0"]},
+                "pbe0": {
+                    "gas": 569.911,
+                    "acetone": 570.088,
+                    "chcl3": 570.127,
+                    "acetonitrile": 570.133,
+                    "ch2cl2": 570.135,
+                    "dmso": 570.198,
+                    "h2o": 570.482,
+                    "methanol": 570.103,
+                    "thf": 570.164,
+                    "toluene": 570.119,
+                },
+                "dsd-blyp": {
+                    "gas": 566.08,
+                    "acetone": 564.411,
+                    "chcl3": 564.793,
+                    "acetonitrile": 564.406,
+                    "ch2cl2": 564.583,
+                    "dmso": 564.448,
+                    "h2o": 564.684,
+                    "methanol": 564.385,
+                    "thf": 564.658,
+                    "toluene": 565.213,
+                },
+                "wb97x": {
+                    "gas": 564.63,
+                    "acetone": 564.706,
+                    "chcl3": 564.726,
+                    "acetonitrile": 564.75,
+                    "ch2cl2": 564.72,
+                    "dmso": 564.813,
+                    "h2o": 565.093,
+                    "methanol": 564.721,
+                    "thf": 564.752,
+                    "toluene": 564.742,
+                },
+                "pbeh-3c": {
+                    "gas": 619.182,
+                    "acetone": 623.189,
+                    "chcl3": 622.29,
+                    "acetonitrile": 623.352,
+                    "ch2cl2": 622.833,
+                    "dmso": 623.451,
+                    "h2o": 623.764,
+                    "methanol": 623.308,
+                    "thf": 622.734,
+                    "toluene": 621.304,
+                },
             },
         },
-        "b97-3c": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["300.8"],
-                    "chcl3": ["300.1"],
-                    "ch2cl2": ["298.6"],
-                    "dmso": ["299.9"],
-                    "h2o": ["300.2"],
-                    "methanol": ["299.5"],
-                    "thf": ["300.6"],
+        "TMP": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 291.33,
+                    "acetone": 276.264,
+                    "chcl3": 277.254,
+                    "acetonitrile": 275.207,
+                    "ch2cl2": 276.171,
+                    "dmso": 276.988,
+                    "h2o": 262.671,
+                    "methanol": 263.366,
+                    "thf": 278.685,
+                    "toluene": 283.761,
                 },
-                "PH3": {"toluene": ["336.0"], "gas": ["313.9"]},
+                "pbe0": {
+                    "gas": 277.761,
+                    "acetone": 262.673,
+                    "chcl3": 263.634,
+                    "acetonitrile": 261.631,
+                    "ch2cl2": 262.58,
+                    "dmso": 263.406,
+                    "h2o": 249.27,
+                    "methanol": 249.931,
+                    "thf": 265.061,
+                    "toluene": 270.123,
+                },
+                "dsd-blyp": {
+                    "gas": 299.195,
+                    "acetone": 286.35,
+                    "chcl3": 287.213,
+                    "acetonitrile": 285.469,
+                    "ch2cl2": 286.302,
+                    "dmso": 286.997,
+                    "h2o": 274.843,
+                    "methanol": 275.42,
+                    "thf": 288.362,
+                    "toluene": 292.724,
+                },
+                "wb97x": {
+                    "gas": 277.52,
+                    "acetone": 262.317,
+                    "chcl3": 263.295,
+                    "acetonitrile": 261.26,
+                    "ch2cl2": 262.227,
+                    "dmso": 263.036,
+                    "h2o": 248.805,
+                    "methanol": 249.485,
+                    "thf": 264.716,
+                    "toluene": 269.816,
+                },
+                "pbeh-3c": {
+                    "gas": 390.602,
+                    "acetone": 379.7,
+                    "chcl3": 380.279,
+                    "acetonitrile": 378.978,
+                    "ch2cl2": 379.593,
+                    "dmso": 380.317,
+                    "h2o": 368.831,
+                    "methanol": 369.216,
+                    "thf": 381.391,
+                    "toluene": 384.986,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 286.404,
+                    "acetone": 270.748,
+                    "chcl3": 271.725,
+                    "acetonitrile": 269.462,
+                    "ch2cl2": 270.524,
+                    "dmso": 271.355,
+                    "h2o": 256.342,
+                    "methanol": 257.122,
+                    "thf": 273.469,
+                    "toluene": 278.676,
+                },
+                "pbe0": {
+                    "gas": 272.706,
+                    "acetone": 257.164,
+                    "chcl3": 258.119,
+                    "acetonitrile": 255.895,
+                    "ch2cl2": 256.94,
+                    "dmso": 257.797,
+                    "h2o": 242.92,
+                    "methanol": 243.667,
+                    "thf": 259.855,
+                    "toluene": 264.973,
+                },
+                "dsd-blyp": {
+                    "gas": 294.405,
+                    "acetone": 281.158,
+                    "chcl3": 282.018,
+                    "acetonitrile": 280.073,
+                    "ch2cl2": 280.993,
+                    "dmso": 281.703,
+                    "h2o": 269.086,
+                    "methanol": 269.737,
+                    "thf": 283.464,
+                    "toluene": 287.882,
+                },
+                "wb97x": {
+                    "gas": 272.595,
+                    "acetone": 256.861,
+                    "chcl3": 257.836,
+                    "acetonitrile": 255.578,
+                    "ch2cl2": 256.643,
+                    "dmso": 257.483,
+                    "h2o": 242.627,
+                    "methanol": 243.389,
+                    "thf": 259.577,
+                    "toluene": 264.773,
+                },
+                "pbeh-3c": {
+                    "gas": 385.991,
+                    "acetone": 374.828,
+                    "chcl3": 375.394,
+                    "acetonitrile": 373.92,
+                    "ch2cl2": 374.61,
+                    "dmso": 375.349,
+                    "h2o": 363.431,
+                    "methanol": 363.874,
+                    "thf": 376.762,
+                    "toluene": 380.401,
+                },
             },
             "tpss": {
-                "TMP": {
-                    "acetone": ["311.6"],
-                    "chcl3": ["310.9"],
-                    "ch2cl2": ["309.4"],
-                    "dmso": ["310.7"],
-                    "h2o": ["311.1"],
-                    "methanol": ["310.3"],
-                    "thf": ["311.5"],
+                "tpss": {
+                    "gas": 286.331,
+                    "acetone": 271.022,
+                    "chcl3": 271.947,
+                    "acetonitrile": 269.751,
+                    "ch2cl2": 270.768,
+                    "dmso": 271.616,
+                    "h2o": 256.882,
+                    "methanol": 257.6,
+                    "thf": 273.659,
+                    "toluene": 278.687,
                 },
-                "PH3": {"toluene": ["341.1"], "gas": ["319.3"]},
-            },
-        },
-        "tpss": {
-            "pbe0": {
-                "TMP": {
-                    "acetone": ["301.8"],
-                    "chcl3": ["301.3"],
-                    "ch2cl2": ["300.5"],
-                    "dmso": ["300.6"],
-                    "h2o": ["301.3"],
-                    "methanol": ["301.1"],
-                    "thf": ["301.7"],
+                "pbe0": {
+                    "gas": 272.619,
+                    "acetone": 257.298,
+                    "chcl3": 258.198,
+                    "acetonitrile": 256.053,
+                    "ch2cl2": 257.051,
+                    "dmso": 257.926,
+                    "h2o": 243.408,
+                    "methanol": 244.095,
+                    "thf": 259.935,
+                    "toluene": 264.977,
                 },
-                "PH3": {"toluene": ["334.8"], "gas": ["312.7"]},
-            },
-            "tpss": {
-                "TMP": {
-                    "acetone": ["312.6"],
-                    "chcl3": ["312.0"],
-                    "ch2cl2": ["311.2"],
-                    "dmso": ["311.3"],
-                    "h2o": ["312.1"],
-                    "methanol": ["311.8"],
-                    "thf": ["312.4"],
+                "dsd-blyp": {
+                    "gas": 294.334,
+                    "acetone": 281.319,
+                    "chcl3": 282.131,
+                    "acetonitrile": 280.265,
+                    "ch2cl2": 281.144,
+                    "dmso": 281.852,
+                    "h2o": 269.472,
+                    "methanol": 270.068,
+                    "thf": 283.556,
+                    "toluene": 287.875,
                 },
-                "PH3": {"toluene": ["339.9"], "gas": ["318.1"]},
+                "wb97x": {
+                    "gas": 272.586,
+                    "acetone": 257.148,
+                    "chcl3": 258.069,
+                    "acetonitrile": 255.901,
+                    "ch2cl2": 256.919,
+                    "dmso": 257.755,
+                    "h2o": 243.195,
+                    "methanol": 243.894,
+                    "thf": 259.785,
+                    "toluene": 264.863,
+                },
+                "pbeh-3c": {
+                    "gas": 385.897,
+                    "acetone": 374.881,
+                    "chcl3": 375.407,
+                    "acetonitrile": 373.999,
+                    "ch2cl2": 374.652,
+                    "dmso": 375.391,
+                    "h2o": 363.697,
+                    "methanol": 364.097,
+                    "thf": 376.757,
+                    "toluene": 380.319,
+                },
             },
         },
     }
-
+    si_tm_shieldings = {
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 334.2579542,
+                    "acetone": 334.1639413,
+                    "chcl3": 334.1459912,
+                    "acetonitrile": 334.1644763,
+                    "ch2cl2": 334.143167,
+                    "dmso": 334.2355086,
+                    "h2o": 334.1700712,
+                    "methanol": 334.1638302,
+                    "thf": 334.1765686,
+                    "toluene": 334.1672644,
+                },
+                "pbe0": {
+                    "gas": 332.1432161,
+                    "acetone": 332.0806043,
+                    "chcl3": 332.027555,
+                    "acetonitrile": 332.070525,
+                    "ch2cl2": 332.0181509,
+                    "dmso": 332.1389588,
+                    "h2o": 332.0768365,
+                    "methanol": 332.082777,
+                    "thf": 332.0989747,
+                    "toluene": 332.0655251,
+                },
+                "pbeh-3c": {
+                    "gas": 425.4500968,
+                    "acetone": 425.4194168,
+                    "chcl3": 425.3783658,
+                    "acetonitrile": 425.4187809,
+                    "ch2cl2": 425.3492293,
+                    "dmso": 425.4302912,
+                    "h2o": 425.4004059,
+                    "methanol": 425.3865089,
+                    "thf": 425.4157351,
+                    "toluene": 425.4555181,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 334.5698984,
+                    "acetone": 334.0803779,
+                    "chcl3": 334.1093328,
+                    "acetonitrile": 334.0665281,
+                    "ch2cl2": 334.1280337,
+                    "dmso": 334.1272572,
+                    "h2o": 334.0495564,
+                    "methanol": 334.1137413,
+                    "thf": 334.1251606,
+                    "toluene": 334.1235476,
+                },
+                "pbe0": {
+                    "gas": 332.3546979,
+                    "acetone": 331.9058869,
+                    "chcl3": 331.8955148,
+                    "acetonitrile": 331.8800833,
+                    "ch2cl2": 331.9140658,
+                    "dmso": 331.948424,
+                    "h2o": 331.8617288,
+                    "methanol": 331.9375391,
+                    "thf": 331.9562723,
+                    "toluene": 331.9253075,
+                },
+                "pbeh-3c": {
+                    "gas": 426.0062656,
+                    "acetone": 425.7811084,
+                    "chcl3": 425.7602588,
+                    "acetonitrile": 425.745999,
+                    "ch2cl2": 425.7473718,
+                    "dmso": 425.779427,
+                    "h2o": 425.7365851,
+                    "methanol": 425.7713265,
+                    "thf": 425.7964293,
+                    "toluene": 425.8200844,
+                },
+            },
+            "tpss": {
+                "tpss": {
+                    "gas": 333.7779314,
+                    "acetone": 333.3511708,
+                    "chcl3": 333.3794838,
+                    "acetonitrile": 333.3298692,
+                    "ch2cl2": 333.3946486,
+                    "dmso": 333.3881767,
+                    "h2o": 333.3406562,
+                    "methanol": 333.3784136,
+                    "thf": 333.3860666,
+                    "toluene": 333.3885135,
+                },
+                "pbe0": {
+                    "gas": 331.5820841,
+                    "acetone": 331.1904714,
+                    "chcl3": 331.1839521,
+                    "acetonitrile": 331.1565218,
+                    "ch2cl2": 331.1982524,
+                    "dmso": 331.2347884,
+                    "h2o": 331.1670301,
+                    "methanol": 331.2231923,
+                    "thf": 331.2383692,
+                    "toluene": 331.2108329,
+                },
+                "pbeh-3c": {
+                    "gas": 425.0726297,
+                    "acetone": 424.9009564,
+                    "chcl3": 424.8706079,
+                    "acetonitrile": 424.8831877,
+                    "ch2cl2": 424.8554965,
+                    "dmso": 424.9143792,
+                    "h2o": 424.8579037,
+                    "methanol": 424.8851226,
+                    "thf": 424.9146175,
+                    "toluene": 424.9330242,
+                },
+            },
+        }
+    }
+    si_orca_shieldings = {
+        "TMS": {
+            "pbeh-3c": {
+                "tpss": {
+                    "gas": 344.281,
+                    "acetone": 344.239,
+                    "chcl3": 344.311,
+                    "acetonitrile": 344.198,
+                    "ch2cl2": 344.231,
+                    "dmso": 344.292,
+                    "h2o": 344.228,
+                    "methanol": 344.291,
+                    "thf": 344.283,
+                    "toluene": 344.452,
+                },
+                "pbe0": {
+                    "gas": 332.181,
+                    "acetone": 332.067,
+                    "chcl3": 332.162,
+                    "acetonitrile": 332.033,
+                    "ch2cl2": 332.082,
+                    "dmso": 332.122,
+                    "h2o": 332.048,
+                    "methanol": 332.122,
+                    "thf": 332.134,
+                    "toluene": 332.298,
+                },
+                "dsd-blyp": {
+                    "gas": 357.874,
+                    "acetone": 357.762,
+                    "chcl3": 357.864,
+                    "acetonitrile": 357.726,
+                    "ch2cl2": 357.783,
+                    "dmso": 357.798,
+                    "h2o": 357.715,
+                    "methanol": 357.809,
+                    "thf": 357.826,
+                    "toluene": 358.001,
+                },
+                "wb97x": {
+                    "gas": 335.739,
+                    "acetone": 335.641,
+                    "chcl3": 335.74,
+                    "acetonitrile": 335.606,
+                    "ch2cl2": 335.659,
+                    "dmso": 335.687,
+                    "h2o": 335.608,
+                    "methanol": 335.692,
+                    "thf": 335.707,
+                    "toluene": 335.879,
+                },
+                "pbeh-3c": {
+                    "gas": 425.385,
+                    "acetone": 425.52,
+                    "chcl3": 425.527,
+                    "acetonitrile": 425.511,
+                    "ch2cl2": 425.508,
+                    "dmso": 425.578,
+                    "h2o": 425.566,
+                    "methanol": 425.557,
+                    "thf": 425.54,
+                    "toluene": 425.556,
+                },
+            },
+            "b97-3c": {
+                "tpss": {
+                    "gas": 344.503,
+                    "acetone": 344.558,
+                    "chcl3": 344.676,
+                    "acetonitrile": 344.487,
+                    "ch2cl2": 344.537,
+                    "dmso": 344.67,
+                    "h2o": 344.542,
+                    "methanol": 344.662,
+                    "thf": 344.637,
+                    "toluene": 344.919,
+                },
+                "pbe0": {
+                    "gas": 332.338,
+                    "acetone": 332.293,
+                    "chcl3": 332.442,
+                    "acetonitrile": 332.236,
+                    "ch2cl2": 332.31,
+                    "dmso": 332.4,
+                    "h2o": 332.288,
+                    "methanol": 332.392,
+                    "thf": 332.403,
+                    "toluene": 332.676,
+                },
+                "dsd-blyp": {
+                    "gas": 357.729,
+                    "acetone": 357.628,
+                    "chcl3": 357.774,
+                    "acetonitrile": 357.578,
+                    "ch2cl2": 357.655,
+                    "dmso": 357.692,
+                    "h2o": 357.632,
+                    "methanol": 357.703,
+                    "thf": 357.725,
+                    "toluene": 357.985,
+                },
+                "wb97x": {
+                    "gas": 335.744,
+                    "acetone": 335.688,
+                    "chcl3": 335.837,
+                    "acetonitrile": 335.633,
+                    "ch2cl2": 335.71,
+                    "dmso": 335.774,
+                    "h2o": 335.704,
+                    "methanol": 335.776,
+                    "thf": 335.792,
+                    "toluene": 336.064,
+                },
+                "pbeh-3c": {
+                    "gas": 425.911,
+                    "acetone": 426.14,
+                    "chcl3": 426.185,
+                    "acetonitrile": 426.113,
+                    "ch2cl2": 426.124,
+                    "dmso": 426.254,
+                    "h2o": 426.162,
+                    "methanol": 426.22,
+                    "thf": 426.196,
+                    "toluene": 426.294,
+                },
+            },
+            "tpss": {
+                "tpss": {
+                    "gas": 343.24,
+                    "acetone": 343.388,
+                    "chcl3": 343.506,
+                    "acetonitrile": 343.343,
+                    "ch2cl2": 343.385,
+                    "dmso": 343.48,
+                    "h2o": 343.378,
+                    "methanol": 343.47,
+                    "thf": 343.449,
+                    "toluene": 343.647,
+                },
+                "pbe0": {
+                    "gas": 331.055,
+                    "acetone": 331.217,
+                    "chcl3": 331.313,
+                    "acetonitrile": 331.175,
+                    "ch2cl2": 331.224,
+                    "dmso": 331.303,
+                    "h2o": 331.205,
+                    "methanol": 331.296,
+                    "thf": 331.293,
+                    "toluene": 331.461,
+                },
+                "dsd-blyp": {
+                    "gas": 357.099,
+                    "acetone": 357.125,
+                    "chcl3": 357.231,
+                    "acetonitrile": 357.081,
+                    "ch2cl2": 357.141,
+                    "dmso": 357.179,
+                    "h2o": 357.075,
+                    "methanol": 357.188,
+                    "thf": 357.195,
+                    "toluene": 357.379,
+                },
+                "wb97x": {
+                    "gas": 334.802,
+                    "acetone": 334.886,
+                    "chcl3": 334.987,
+                    "acetonitrile": 334.842,
+                    "ch2cl2": 334.897,
+                    "dmso": 334.957,
+                    "h2o": 334.855,
+                    "methanol": 334.958,
+                    "thf": 334.959,
+                    "toluene": 335.134,
+                },
+                "pbeh-3c": {
+                    "gas": 424.346,
+                    "acetone": 424.653,
+                    "chcl3": 424.66,
+                    "acetonitrile": 424.64,
+                    "ch2cl2": 424.633,
+                    "dmso": 424.74,
+                    "h2o": 424.718,
+                    "methanol": 424.709,
+                    "thf": 424.681,
+                    "toluene": 424.701,
+                },
+            },
+        }
+    }
     # shieldings and solvent models
     if solv is None:
         solv = "gas"
     if prog == "tm":
         # print('NMR data: func {}, funcS {}, href {}, solv {}'.format(str(func), str(funcS), str(href), str(solv)))
-        hshielding = h_tm_shieldings[func][funcS][href][solv][0]
-        cshielding = c_tm_shieldings[func][funcS][cref][solv][0]
-        fshielding = f_tm_shieldings[func][funcS][fref][solv][0]
-        pshielding = p_tm_shieldings[func][funcS][pref][solv][0]
+        try:
+            hshielding = "{:4.3f}".format(h_tm_shieldings[href][func][funcS][solv])
+            cshielding = "{:4.3f}".format(c_tm_shieldings[cref][func][funcS][solv])
+            fshielding = "{:4.3f}".format(f_tm_shieldings[fref][func][funcS][solv])
+            pshielding = "{:4.3f}".format(p_tm_shieldings[pref][func][funcS][solv])
+            sishielding = "{:4.3f}".format(si_tm_shieldings[siref][func][funcS][solv])
+        except KeyError:
+            hshielding = 0
+            cshielding = 0
+            fshielding = 0
+            pshielding = 0
+            sishielding = 0
+            print(
+                "ERROR! The reference absolute shielding constant could not be"
+                " found!\n You have to edit the file .anmrrc by hand!"
+            )
+            save_errors.append(
+                "ERROR! The reference absolute shielding constant could not be"
+                " found!\n You have to edit the file .anmrrc by hand!"
+            )
         if sm == "cosmo":
             print(
                 "WARNING: The geometry optimization of the reference molecule "
@@ -2397,34 +3266,47 @@ def writing_anmrrc(
                 "basis def2-TZVP (basisS)!"
             )
         sm = "DCOSMO-RS"
-        sm4 = "COSMO"
+        sm4 = "DCOSMO-RS"
         basisS = "def2-TZVP"
     elif prog == "orca":
-        hshielding = h_orca_shieldings[func][funcS][href][solv][0]
-        cshielding = c_orca_shieldings[func][funcS][cref][solv][0]
-        if orca_old:
-            fshielding = f_orca_shieldings_old[func][funcS][fref][solv][0]
-        elif orca_new:
-            fshielding = f_orca_shieldings_new[func][funcS][fref][solv][0]
-        pshielding = p_orca_shieldings[func][funcS][pref][solv][0]
+        try:
+            hshielding = "{:4.3f}".format(h_orca_shieldings[href][func][funcS][solv])
+            cshielding = "{:4.3f}".format(c_orca_shieldings[cref][func][funcS][solv])
+            fshielding = "{:4.3f}".format(f_orca_shieldings[fref][func][funcS][solv])
+            pshielding = "{:4.3f}".format(p_orca_shieldings[pref][func][funcS][solv])
+            sishielding = "{:4.3f}".format(si_orca_shieldings[siref][func][funcS][solv])
+        except KeyError:
+            hshielding = 0
+            cshielding = 0
+            fshielding = 0
+            pshielding = 0
+            sishielding = 0
+            print(
+                "ERROR! The reference absolute shielding constant could not be"
+                " found!\n You have to edit the file .anmrrc by hand!"
+            )
+            save_errors.append(
+                "ERROR! The reference absolute shielding constant could not be"
+                " found!\n You have to edit the file .anmrrc by hand!"
+            )
         if sm == "cpcm":
             print(
                 "WARNING: The geometry optimization of the reference molecule "
                 "was calculated with SMD instead of CPCM as solvent model (sm)!"
             )
-        if sm4 == "smd":
+        if sm4 == "cpcm":
             print(
-                "WARNING: The reference shielding was calculated with CPCM "
-                "instead of SMD as solvent model (sm)!"
+                "WARNING: The reference shielding was calculated with SMD "
+                "instead of CPCM as solvent model (sm)!"
             )
-        if basisS != "pcSseg-2":
+        if basisS != "def2-TZVP":
             print(
                 "WARNING: The reference shielding was calculated with the "
-                "basis pcSseg-2 (basisS)!"
+                "basis def2-TZVP (basisS)!"
             )
         sm = "SMD"
-        sm4 = "CPCM"
-        basisS = "pcSseg-2"
+        sm4 = "SMD"
+        basisS = "def2-TZVP"
     # basis set for optimization
     if func == "pbeh-3c":
         basisfunc = "def2-mSVP"
@@ -2439,23 +3321,21 @@ def writing_anmrrc(
         prog = "TM"
     elif args.prog4 == "orca":
         prog = "ORCA"
+    ha = 0
+    ca = 0
+    fa = 0
+    pa = 0
+    sia = 0
     if hactive == "on":
         ha = 1
-    else:
-        ha = 0
     if cactive == "on":
         ca = 1
-    else:
-        ca = 0
     if factive == "on":
         fa = 1
-    else:
-        fa = 0
     if pactive == "on":
         pa = 1
-    else:
-        pa = 0
-
+    if siactive == "on":
+        sia = 1
     with open(os.path.join(cwd, ".anmrrc"), "w", newline=None) as arc:
         arc.write("7 8 XH acid atoms\n")
         if args.mf is not None:
@@ -2468,7 +3348,16 @@ def writing_anmrrc(
             arc.write("ENSO qm= {} lw= 1.2\n".format(str(prog).upper()))
         try:
             length = max(
-                [len(i) for i in [hshielding, cshielding, fshielding, pshielding]]
+                [
+                    len(i)
+                    for i in [
+                        hshielding,
+                        cshielding,
+                        fshielding,
+                        pshielding,
+                        sishielding,
+                    ]
+                ]
             )
         except:
             length = 6
@@ -2487,9 +3376,11 @@ def writing_anmrrc(
             "9  {:{digits}}    0.0    {}\n".format(fshielding, fa, digits=length)
         )  # fluorine
         arc.write(
+            "14 {:{digits}}    0.0    {}\n".format(sishielding, sia, digits=length)
+        )  # silicon
+        arc.write(
             "15 {:{digits}}    0.0    {}\n".format(pshielding, pa, digits=length)
         )  # phosphorus
-
     return
 
 
@@ -2557,13 +3448,22 @@ class qm_job:
     basis = None
     gfnv = None
     unpaired = 0
-    cosmorssetup = None
     spenergy = None
     hactive = False
     cactive = False
     pactive = False
+    siactive = False
     factive = False
     symmetry = "C1"
+    temperature = 298.15
+    nat = 0
+    progsettings = {
+        "tempprogpath": "",
+        "xtbpath": "",
+        "orca_old": "",
+        "omp": 1,
+        "cosmorssetup": None,
+    }
 
     def execute(self):
         pass
@@ -2574,7 +3474,11 @@ class qm_job:
     def _opt(self):
         pass
 
-    def _gbsa_rs(self):
+    def _genericoutput(self):
+        """ READ shielding and coupling constants and write them to plain output"""
+        pass
+
+    def _gbsa_rs(self, environsettings):
         """ Calculate GBSA-RS"""
         if not self.boltzmann:
             tmp_gas = 0
@@ -2586,7 +3490,7 @@ class qm_job:
                 os.path.join(self.workdir, "gas.out"), "w", newline=None
             ) as outputfile:
                 callargs = [
-                    xtbpath,
+                    self.progsettings["xtbpath"],
                     "coord",
                     "-" + str(self.gfnv),
                     "-sp",
@@ -2602,7 +3506,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.gsolv = None
@@ -2618,7 +3522,7 @@ class qm_job:
                 os.path.join(self.workdir, "solv.out"), "w", newline=None
             ) as outputfile:
                 callargs = [
-                    xtbpath,
+                    self.progsettings["xtbpath"],
                     "coord",
                     "-" + str(self.gfnv),
                     "-sp",
@@ -2636,7 +3540,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.gsolv = None
@@ -2751,7 +3655,7 @@ class qm_job:
                     self.success = True
             return
 
-    def _xtbrrho(self):
+    def _xtbrrho(self, environsettings):
         """
         RRHO contribution with GFN-XTB, available both to ORCA and TM
         """
@@ -2765,7 +3669,7 @@ class qm_job:
                 os.path.join(self.workdir, "xcontrol-inp"), "w", newline=None
             ) as xcout:
                 xcout.write("$thermo\n")
-                xcout.write("    temp={}\n".format(args.temperature))
+                xcout.write("    temp={}\n".format(self.temperature))
                 xcout.write("$end")
             time.sleep(0.05)
             with open(
@@ -2773,7 +3677,7 @@ class qm_job:
             ) as outputfile:
                 if self.solv:
                     callargs = [
-                        xtbpath,
+                        self.progsettings["xtbpath"],
                         "coord",
                         "-" + str(self.gfnv),
                         "-ohess",
@@ -2788,7 +3692,7 @@ class qm_job:
                     ]
                 else:
                     callargs = [
-                        xtbpath,
+                        self.progsettings["xtbpath"],
                         "coord",
                         "-" + str(self.gfnv),
                         "-ohess",
@@ -2807,7 +3711,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.05)
             # check if converged:
@@ -2832,7 +3736,7 @@ class qm_job:
             if "ZPVE" not in data:
                 data["ZPVE"] = 0.0
             if "G(T)" in data:
-                if float(args.temperature) == 0:
+                if float(self.temperature) == 0:
                     self.rrho = data["ZPVE"]
                     self.success = True
                 else:
@@ -2859,7 +3763,7 @@ class qm_job:
             self.success = False
         return
 
-    def _TMSP(self):
+    def _TMSP(self, environsettings):
         """Turbomole single-point calculation"""
         if not self.boltzmann:
             with open(
@@ -2873,7 +3777,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
         time.sleep(0.02)
         # check if scf is converged:
@@ -2976,7 +3880,7 @@ class qm_job:
             a0 = False
         return a0
 
-    def _solv_complete(self):
+    def _solv_complete(self, environsettings):
         """complete COSMO-RS within the ENSO script"""
         if not self.boltzmann:
             print(
@@ -3046,10 +3950,10 @@ class qm_job:
                 os.path.join(old_workdir, "coord"), os.path.join(self.workdir, "coord")
             )
             # parametrization and version:
-            if "FINE" in self.cosmorssetup.split()[2]:
+            if "FINE" in self.progsettings["cosmorssetup"].split()[2]:
                 fine = True
                 param = "fine"
-                if cosmothermversion == 19:
+                if self.progsettings["cosmothermversion"] == 19:
                     param = "19-fine"
             else:
                 fine = False
@@ -3092,7 +3996,7 @@ class qm_job:
                             break
             # end cefine
             # running single-point in gas phase
-            self._TMSP()
+            self._TMSP(environsettings)
             if not self.success:
                 print("Error in COSMO-RS calculation!")
                 return 1
@@ -3126,7 +4030,7 @@ class qm_job:
                     out.write("$cosmo_out file=out.cosmo \n")
                     out.write("$cosmo_isorad \n")
                     out.write("$end \n")
-            self._TMSP()
+            self._TMSP(environsettings)
             if not self.success:
                 print("Error in COSMO-RS calculation during single-point calculation!")
                 return 1
@@ -3137,6 +4041,7 @@ class qm_job:
                 "h2o": "f = h2o.cosmo ",
                 "chcl3": "f = chcl3.cosmo ",
                 "ch2cl2": "f = ch2cl2.cosmo ",
+                "acetonitrile": "f = acetonitrile_c.cosmo",
                 "dmso": "f = dimethylsulfoxide.cosmo ",
                 "methanol": "f = methanol.cosmo ",
                 "thf": "f = thf.cosmo ",
@@ -3144,12 +4049,16 @@ class qm_job:
             }
             if fine:
                 solv_data = os.path.join(
-                    os.path.split(self.cosmorssetup.split()[5].strip('"'))[0],
+                    os.path.split(
+                        self.progsettings["cosmorssetup"].split()[5].strip('"')
+                    )[0],
                     "DATABASE-COSMO/BP-TZVPD-FINE",
                 )
             else:
                 solv_data = os.path.join(
-                    os.path.split(self.cosmorssetup.split()[5].strip('"'))[0],
+                    os.path.split(
+                        self.progsettings["cosmorssetup"].split()[5].strip('"')
+                    )[0],
                     "DATABASE-COSMO/BP-TZVP-COSMO",
                 )
             # test = ['ctd = BP_TZVP_C30_1601.ctd cdir = "/software/cluster/COSMOthermX16/COSMOtherm/CTDATA-FILES"']
@@ -3169,10 +4078,10 @@ class qm_job:
             with open(
                 os.path.join(self.workdir, "cosmotherm.inp"), "w", newline=None
             ) as out:
-                out.write(self.cosmorssetup + "\n")
+                out.write(self.progsettings["cosmorssetup"] + "\n")
                 # write from ensorc
                 out.write("EFILE VPFILE \n")
-                if cosmothermversion > 16:
+                if self.progsettings["cosmothermversion"] > 16:
                     pass
                 else:  # cosmothermX16
                     out.write("\n")  # needs empty line!
@@ -3192,7 +4101,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.1)
             # get T and Gsolv for version > cosmothermX16
@@ -3236,7 +4145,7 @@ class qm_job:
                 self.gsolv = None
                 self.success = False
                 return 1
-            temp = float(args.temperature)
+            temp = float(self.temperature)
             gsolv_out = (
                 a0[0]
                 + a0[1] * temp
@@ -3353,8 +4262,12 @@ class qm_job:
 
 
 class tm_job(qm_job):
-    def cefine(self):
+    def cefine(self, environsettings):
         """Do cefine for func"""
+        removegf = False
+        if self.basis == "def2-QZVP(-gf)":
+            self.basis = "def2-QZVP"
+            removegf = True
         cef_calls = {
             "b97-3c": [
                 "cefine",
@@ -3432,12 +4345,65 @@ class tm_job(qm_job):
                 "-func",
                 "pbe0",
                 "-bas",
-                "def2-TZVP",
+                str(self.basis),
                 "-noopt",
                 "-grid",
                 " m4",
                 "-scfconv",
                 "6",
+                "-sym",
+                "c1",
+                "-d3",
+            ],
+        }
+        cef_rrhocalls = {
+            "b97-3c": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "b973c",
+                "-bas",
+                "def2-mTZVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+                "-novdw",
+            ],
+            "pbeh-3c": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "pbeh-3c",
+                "-bas",
+                "def2-mSVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+            ],
+            "tpss": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "tpss",
+                "-fpol",
+                "-bas",
+                "def2-TZVP",
+                "-noopt",
+                "-grid",
+                " m5",
+                "-scfconv",
+                "7",
                 "-sym",
                 "c1",
                 "-d3",
@@ -3480,35 +4446,68 @@ class tm_job(qm_job):
                 "c1",
                 "-d3",
             ],
+            "pbeh-3c": [
+                "cefine",
+                "-chrg",
+                str(self.chrg),
+                "-func",
+                "pbeh-3c",
+                "-fpol",
+                "-bas",
+                "def2-mSVP",
+                "-noopt",
+                "-grid",
+                " 4",
+                "-scfconv",
+                "7",
+                "-sym",
+                "c1",
+                "-d3",
+            ],
         }
+        # remove -fg functions from def2-QZVP basis set
+        if removegf:
+            cef_calls[self.func] = cef_calls[self.func] + ["-gf"]
         for k in range(2):
-            if self.NMR:
+            if self.jobtype == "rrhotm":
+                # use higher grid
                 s = subprocess.check_output(
-                    cef_callsnmr[self.func],
+                    cef_rrhocalls[self.func],
                     shell=False,
                     stdin=None,
                     stderr=subprocess.STDOUT,
                     universal_newlines=False,
                     cwd=self.workdir,
                 )
-            elif self.unpaired > 0:
-                s = subprocess.check_output(
-                    cef_calls[self.func] + ["-uhf", str(self.unpaired)],
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                )
-            elif self.unpaired == 0:
-                s = subprocess.check_output(
-                    cef_calls[self.func],
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                )
+            else:
+                if self.NMR:
+                    s = subprocess.check_output(
+                        cef_callsnmr[self.func],
+                        shell=False,
+                        stdin=None,
+                        stderr=subprocess.STDOUT,
+                        universal_newlines=False,
+                        cwd=self.workdir,
+                    )
+                elif self.unpaired > 0:
+                    s = subprocess.check_output(
+                        cef_calls[self.func] + ["-uhf", str(self.unpaired)],
+                        shell=False,
+                        stdin=None,
+                        stderr=subprocess.STDOUT,
+                        universal_newlines=False,
+                        cwd=self.workdir,
+                    )
+                elif self.unpaired == 0:
+                    s = subprocess.check_output(
+                        cef_calls[self.func],
+                        shell=False,
+                        stdin=None,
+                        stderr=subprocess.STDOUT,
+                        universal_newlines=False,
+                        cwd=self.workdir,
+                    )
+
             time.sleep(0.15)
             output = s.decode("utf-8").splitlines()
             # checkoutput for errors
@@ -3526,8 +4525,8 @@ class tm_job(qm_job):
                 checkup = control.readlines()
             for line in checkup:
                 if "functional" in line:
-                    if self.func == 'b97-3c':
-                        testfunc = 'b973c'
+                    if self.func == "b97-3c":
+                        testfunc = "b973c"
                     else:
                         testfunc = self.func
                     if testfunc not in line:
@@ -3554,6 +4553,13 @@ class tm_job(qm_job):
                 " cavity closed",
                 " use_contcav",
                 "$dcosmo_rs file=chcl3_25.pot",
+            ],
+            "acetonitrile": [
+                "$cosmo",
+                " epsilon= 36.6",
+                " cavity closed",
+                " use_contcav",
+                "$dcosmo_rs file=acetonitrile_25.pot",
             ],
             "ch2cl2": [
                 "$cosmo",
@@ -3601,6 +4607,12 @@ class tm_job(qm_job):
         solvent_cosmo = {
             "acetone": ["$cosmo", " epsilon= 20.7", " cavity closed", " use_contcav"],
             "chcl3": ["$cosmo", " epsilon= 4.8", " cavity closed", " use_contcav"],
+            "acetonitrile": [
+                "$cosmo",
+                " epsilon= 36.6",
+                " cavity closed",
+                " use_contcav",
+            ],
             "ch2cl2": ["$cosmo", " epsilon= 9.1", " cavity closed", " use_contcav"],
             "dmso": ["$cosmo", " epsilon= 47.2", " cavity closed", " use_contcav"],
             "h2o": ["$cosmo", " epsilon= 80.1", " cavity closed", " use_contcav"],
@@ -3637,7 +4649,7 @@ class tm_job(qm_job):
                 os.path.join(self.workdir, "control"), "w", newline=None
             ) as newcontrol:
                 for line in tmp[:-1]:  # change thresholds if DCOSMO-RS is used
-                    newcontrol.write(line + " \n")
+                    newcontrol.write(line)
                 if self.sm == "dcosmors":
                     for line in solvent_dcosmors[self.solv]:
                         newcontrol.write(line + " \n")
@@ -3655,6 +4667,8 @@ class tm_job(qm_job):
             if self.factive:
                 numactive += 1
             if self.pactive:
+                numactive += 1
+            if self.siactive:
                 numactive += 1
             with open(
                 os.path.join(self.workdir, "control"),
@@ -3687,14 +4701,14 @@ class tm_job(qm_job):
                         newcontrol.write('$nucsel "h" "c" "f" "p"\n')
                         newcontrol.write('$nucsel2 "h" "c" "f" "p"\n')
                 else:
-                    newcontrol.write('$nucsel "h" "c" "f" "p"\n')
-                    newcontrol.write('$nucsel2 "h" "c" "f" "p"\n')
+                    newcontrol.write('$nucsel "h" "c" "f" "p" "si"\n')
+                    newcontrol.write('$nucsel2 "h" "c" "f" "p" "si"\n')
                 newcontrol.write("$rpaconv 8\n")
                 newcontrol.write("$end")
         time.sleep(0.15)
         return 0
 
-    def _sp(self):
+    def _sp(self, environsettings):
         """Turbomole single-point calculation"""
         if not self.boltzmann:
             print("Running single-point in {:18}".format(last_folders(self.workdir, 2)))
@@ -3709,7 +4723,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
         time.sleep(0.02)
         # check if scf is converged:
@@ -3760,7 +4774,7 @@ class tm_job(qm_job):
             self.success = False
         return
 
-    def _xtbopt(self):
+    def _xtbopt(self, environsettings):
         """Turbomole optimization using ANCOPT implemented in GFN-xTB"""
         if self.full:
             output = "opt-part2.out"
@@ -3770,13 +4784,25 @@ class tm_job(qm_job):
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if os.path.isfile(os.path.join(self.workdir, "xtbrestart")):
                 os.remove(os.path.join(self.workdir, "xtbrestart"))
-            if self.full:  # KS!!
+            if self.full:
                 if self.sm == "dcosmors" and self.solv:
-                    callargs = [xtbpath, "coord", "-opt", "lax", "-tm"]
+                    callargs = [
+                        self.progsettings["xtbpath"],
+                        "coord",
+                        "-opt",
+                        "lax",
+                        "-tm",
+                    ]
                 else:  # gas phase
-                    callargs = [xtbpath, "coord", "-opt", "-tm"]
+                    callargs = [self.progsettings["xtbpath"], "coord", "-opt", "-tm"]
             else:  # only crude
-                callargs = [xtbpath, "coord", "-opt", "crude", "-tm"]
+                callargs = [
+                    self.progsettings["xtbpath"],
+                    "coord",
+                    "-opt",
+                    "crude",
+                    "-tm",
+                ]
 
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
@@ -3789,7 +4815,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             if returncode is not 0:
                 self.energy = None
@@ -3852,7 +4878,7 @@ class tm_job(qm_job):
             self.success = False
         return
 
-    def _opt(self):
+    def _opt(self, environsettings):
         """Turbomole optimization using JOBEX, using adapted thresholds!"""
 
         # part2 = full optimization at either: normal (Econv/Eh = 5 × 10⁻⁶; Gconv/Eh·α⁻¹ = 1 × 10⁻³) or
@@ -3919,7 +4945,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
 
             time.sleep(0.02)
@@ -3975,12 +5001,12 @@ class tm_job(qm_job):
             return 1
         return
 
-    def _rrho(self):
+    def _rrho(self, environsettings):
         """Turbomole RRHO correction in the gas phase"""
         thermo_dict = {
-            "b97-3c": ["100", args.temperature, "1.0"],
-            "tpss": ["100", args.temperature, "1.0"],
-            "pbeh-3c": ["100", args.temperature, "0.95"],
+            "b97-3c": ["100", self.temperature, "1.0"],
+            "tpss": ["100", self.temperature, "1.0"],
+            "pbeh-3c": ["100", self.temperature, "0.95"],
         }
         opt = False  # parameter to check whether reoptimization is required
         if self.boltzmann:  # only for boltzmann evaluation
@@ -4022,12 +5048,15 @@ class tm_job(qm_job):
             self.solv = None
             opt = True
         if not self.boltzmann:  # only gas phase frequencies implemented!
-            self.cefine()
-            # if optimization was carried out in solution, need new optimization in gas phase
+            self.cefine(environsettings)
+            # if optimization was carried out in solution,
+            # need new optimization in gas phase
             if opt:
-                self._opt()
-            else:  # if optimization was carried out in gas phase, coord is sufficient without reoptimization
-                self._sp()
+                self.full = True
+                self._opt(environsettings)
+            else:  # if optimization was carried out in gas phase,
+                # coord is sufficient without reoptimization
+                self._sp(environsettings)
                 # rdgrad
                 print("Running rdgrad in {}".format(last_folders(self.workdir, 2)))
                 with open(
@@ -4041,7 +5070,7 @@ class tm_job(qm_job):
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=settings,
+                        env=environsettings,
                     )
                 time.sleep(0.02)
                 with open(
@@ -4069,14 +5098,14 @@ class tm_job(qm_job):
                 os.path.join(self.workdir, "aoforce.out"), "w", newline=None
             ) as outputfile:
                 subprocess.call(
-                    ["aoforce", "-smpcpus", str(args.omp)],
+                    ["aoforce", "-smpcpus", str(self.progsettings["omp"])],
                     shell=False,
                     stdin=None,
                     stderr=None,
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=settings,
+                    env=environsettings,
                 )
             time.sleep(0.05)
             # run thermo
@@ -4093,7 +5122,7 @@ class tm_job(qm_job):
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=settings,
+                        env=environsettings,
                     )
                 with open(
                     os.path.join(self.workdir, "thermo.out"),
@@ -4123,7 +5152,7 @@ class tm_job(qm_job):
                 self.success = False
         return
 
-    def _nmrJ(self):
+    def _nmrJ(self, environsettings):
         """ TM NMR coupling calculation"""
         print(
             "Running couplings calculation in {}".format(last_folders(self.workdir, 2))
@@ -4133,14 +5162,18 @@ class tm_job(qm_job):
             os.path.join(self.workdir, "escf.out"), "w", newline=None
         ) as outputfile:
             subprocess.call(
-                [escfpath, "-smpcpus", str(args.omp)],
+                [
+                    self.progsettings["tempprogpath"],
+                    "-smpcpus",
+                    str(self.progsettings["omp"]),
+                ],
                 shell=False,
                 stdin=None,
                 stderr=subprocess.STDOUT,
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                env=settings,
+                # env=environsettings,
             )
         time.sleep(0.02)
         # check for convergence
@@ -4160,7 +5193,7 @@ class tm_job(qm_job):
                 self.success = False
         return
 
-    def _nmrS(self):
+    def _nmrS(self, environsettings):
         """TM NMR shielding calculation"""
         print(
             "Running shielding calculation in {}".format(last_folders(self.workdir, 2))
@@ -4170,14 +5203,18 @@ class tm_job(qm_job):
             os.path.join(self.workdir, "mpshift.out"), "w", newline=None
         ) as outputfile:
             subprocess.call(
-                [mpshiftpath, "-smpcpus", str(args.omp)],
+                [
+                    self.progsettings["tempprogpath"],
+                    "-smpcpus",
+                    str(self.progsettings["omp"]),
+                ],
                 shell=False,
                 stdin=None,
                 stderr=subprocess.STDOUT,
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                env=settings,
+                env=environsettings,
             )
             time.sleep(0.02)
             # check if shift calculation is converged:
@@ -4195,12 +5232,88 @@ class tm_job(qm_job):
                     self.success = True
                 else:
                     print(
-                        "ERROR: shiedling calculation failed in {:18}".format(
+                        "ERROR: shielding calculation failed in {:18}".format(
                             last_folders(self.workdir, 1)
                         ),
                         file=sys.stderr,
                     )
                     self.success = False
+        return
+
+    def _genericoutput(self):
+        """ READ shielding and coupling constants and write them to plain output"""
+        fnameshield = "mpshift.out"
+        atom = []
+        sigma = []
+        try:
+            with open(
+                os.path.join(self.workdir, fnameshield),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                data = inp.readlines()
+            for line in data:
+                if ">>>>> DFT MAGNETIC SHIELDINGS <<<<<" in line:
+                    start = data.index(line)
+            for line in data[start:]:
+                if "ATOM" in line:
+                    splitted = line.split()
+                    atom.append(int(splitted[2]))
+                    sigma.append(float(splitted[4]))
+
+        except FileNotFoundError:
+            print(
+                "Missing file: {} in {}".format(
+                    fnameshield, last_folders(self.workdir, 2)
+                )
+            )
+            self.success = False
+        self.success = True
+        fnamecoupl = "escf.out"
+        atom1 = []
+        atom2 = []
+        jab = []
+        try:
+            with open(
+                os.path.join(self.workdir, fnamecoupl),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                data = inp.readlines()
+            for line in data:
+                if "Nuclear coupling constants in Hz" in line:
+                    start = int(data.index(line)) + 3
+                if "-----------------------------------" in line:
+                    end = int(data.index(line))
+            for line in data[start:end]:
+                if len(line.split()) == 6:
+                    splitted = line.split()
+                    atom1.append(int(splitted[1]))
+                    atom2.append(int(splitted[4].split(":")[0]))
+                    jab.append(float(splitted[5]))
+        except FileNotFoundError:
+            print(
+                "Missing file: {} in {}".format(
+                    fnamecoupl, last_folders(self.workdir, 2)
+                )
+            )
+            self.success = False
+        self.success = True
+
+        with open(os.path.join(self.workdir, "nmrprop.dat"), "w", newline=None) as out:
+            for i in range(len(atom)):
+                out.write("{:{digits}} {}\n".format(atom[i], sigma[i], digits=4))
+            for i in range(1, self.nat - len(atom)):
+                out.write("\n")
+            for i in range(len(atom1)):
+                out.write(
+                    "{:{digits}} {:{digits}}   {}\n".format(
+                        atom1[i], atom2[i], jab[i], digits=4
+                    )
+                )
+        time.sleep(0.02)
         return
 
     def execute(self):
@@ -4210,26 +5323,28 @@ class tm_job(qm_job):
                 self.success = True
                 pass
             else:
-                self.cefine()
+                self.cefine(environsettings)
                 print("{}  ".format(self.name))
         elif self.jobtype == "sp":
-            self._sp()
+            self._sp(environsettings)
         elif self.jobtype == "xtbopt":
-            self._xtbopt()
+            self._xtbopt(environsettings)
         elif self.jobtype == "opt":
-            self._opt()
+            self._opt(environsettings)
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho()
+            self._xtbrrho(environsettings)
         elif self.jobtype == "rrhotm":
-            self._rrho()
+            self._rrho(environsettings)
         elif self.jobtype == "solv":
-            self._solv_complete()
+            self._solv_complete(environsettings)
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs()
+            self._gbsa_rs(environsettings)
         elif self.jobtype == "nmrJ":
-            self._nmrJ()
+            self._nmrJ(environsettings)
         elif self.jobtype == "nmrS":
-            self._nmrS()
+            self._nmrS(environsettings)
+        elif self.jobtype == "genericout":
+            self._genericoutput()
 
 
 class orca_job(qm_job):
@@ -4237,6 +5352,7 @@ class orca_job(qm_job):
     solvent_smd_new = {
         "acetone": ["%cpcm", " smd     true", ' smdsolvent "acetone"', "end"],
         "chcl3": ["%cpcm", " smd     true", ' smdsolvent "chloroform"', "end"],
+        "acetonitrile": ["%cpcm", " smd     true", ' smdsolvent "ACETONITRILE"', "end"],
         "ch2cl2": ["%cpcm", " smd     true", ' smdsolvent "ch2cl2"', "end"],
         "dmso": ["%cpcm", " smd     true", ' smdsolvent "dmso"', "end"],
         "h2o": ["%cpcm", " smd     true", ' smdsolvent "water"', "end"],
@@ -4248,6 +5364,7 @@ class orca_job(qm_job):
     solvent_smd_old = {
         "acetone": ["%cpcm", " smd     true", ' solvent "acetone"', "end"],
         "chcl3": ["%cpcm", " smd     true", ' solvent "chloroform"', "end"],
+        "acetonitrile": ["%cpcm", " smd     true", ' solvent "ACETONITRILE"', "end"],
         "ch2cl2": ["%cpcm", " smd     true", ' solvent "ch2cl2"', "end"],
         "dmso": ["%cpcm", " smd     true", ' solvent "dmso"', "end"],
         "h2o": ["%cpcm", " smd     true", ' solvent "water"', "end"],
@@ -4259,6 +5376,7 @@ class orca_job(qm_job):
     solvent_cpcm = {
         "acetone": ["!CPCM(Acetone)"],
         "chcl3": ["!CPCM(Chloroform)"],
+        "acetonitrile": ["!CPCM(Acetonitrile)"],
         "ch2cl2": ["!CPCM(CH2Cl2)"],
         "dmso": ["!CPCM(DMSO)"],
         "h2o": ["!CPCM(Water)"],
@@ -4266,34 +5384,6 @@ class orca_job(qm_job):
         "thf": ["!CPCM(THF)"],
         "toluene": ["!CPCM(Toluene)"],
     }
-
-    def coord2xyz(self):
-        """convert TURBOMOLE coord file to xyz"""
-        time.sleep(0.1)
-        bohr2ang = 0.52917721067
-        with open(
-            os.path.join(self.workdir, "coord"), "r", encoding=coding, newline=None
-        ) as f:
-            coord = f.readlines()
-        x = []
-        y = []
-        z = []
-        atom = []
-        for line in coord[1:]:
-            if "$" in line:  # stop at $end ...
-                break
-            x.append(float(line.split()[0]) * bohr2ang)
-            y.append(float(line.split()[1]) * bohr2ang)
-            z.append(float(line.split()[2]) * bohr2ang)
-            atom.append(str(line.split()[3].lower()))
-        # natoms = int(len(coord[1:-1])) # unused
-        coordxyz = []
-        for i in range(len(x)):
-            coordxyz.append(
-                "{} {: 09.7f}  {: 09.7f}  {: 09.7f}".format(atom[i], x[i], y[i], z[i])
-            )
-        self.coord = coordxyz
-        return
 
     def xyz2coord(self):
         """convert file inp.xyz to TURBOMOLE coord file"""
@@ -4331,7 +5421,7 @@ class orca_job(qm_job):
         """ORCA input generation and single-point calculation"""
         if not self.boltzmann:
             # convert coord to xyz
-            self.coord2xyz()
+            self.coord, self.nat = coord2xyz(self.workdir)
             # input generation
             osp_calls = {
                 "b97-3c": [
@@ -4416,16 +5506,16 @@ class orca_job(qm_job):
                 for line in osp_calls[self.func]:
                     inp.write(line + "\n")
                 # nprocs
-                if int(args.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    elif orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4445,7 +5535,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, "sp.out"), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -4493,7 +5583,7 @@ class orca_job(qm_job):
             )
         return
 
-    def _xtbopt(self):
+    def _xtbopt(self, environsettings):
         """
         ORCA input generation and geometry optimization using ANCOPT
         implemented within xtb, generates inp.xyz, inp (orca-input) 
@@ -4506,9 +5596,9 @@ class orca_job(qm_job):
             output = "opt-part1.out"
         if not self.boltzmann:
             # convert coord to xyz, write inp.xyz
-            self.coord2xyz()
+            self.coord, self.nat = coord2xyz(self.workdir)
             with open(os.path.join(self.workdir, "inp.xyz"), "w", newline=None) as inp:
-                inp.write("{}\n\n".format(nat))
+                inp.write("{}\n\n".format(self.nat))
                 for line in self.coord:
                     inp.write(line + "\n")
             # add input file to coord
@@ -4520,7 +5610,12 @@ class orca_job(qm_job):
                 for line in tmp[:-1]:
                     newcoord.write(line)
                 newcoord.write("$external\n")
-                newcoord.write("   orca input file = inp\n")
+                newcoord.write("   orca input file= inp\n")
+                newcoord.write(
+                    "   orca bin= {} \n".format(
+                        os.path.join(self.progsettings["tempprogpath"], "orca")
+                    )
+                )
                 newcoord.write("$end")
             # input generation
             ogo_calls = {
@@ -4577,16 +5672,16 @@ class orca_job(qm_job):
                 # if not self.full:
                 #    inp.write('%geom\n    TolE 5e-4\n    TolRMSG 1e-2\n    TolMaxG ??\n    TolRMSD ??\n    TolMaxD 1.0\nend\n')
                 # nprocROR: in the optimization of
-                if int(args.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    if orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4603,11 +5698,28 @@ class orca_job(qm_job):
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if self.full:
                 if self.sm == "smd" and self.solv:
-                    callargs = [xtbpath, "coord", "--opt", "lax", "--orca"]
+                    callargs = [
+                        self.progsettings["xtbpath"],
+                        "coord",
+                        "--opt",
+                        "lax",
+                        "--orca",
+                    ]
                 else:  # gas phase
-                    callargs = [xtbpath, "coord", "--opt", "--orca"]
+                    callargs = [
+                        self.progsettings["xtbpath"],
+                        "coord",
+                        "--opt",
+                        "--orca",
+                    ]
             else:  # only crude
-                callargs = [xtbpath, "coord", "--opt", "crude", "--orca"]
+                callargs = [
+                    self.progsettings["xtbpath"],
+                    "coord",
+                    "--opt",
+                    "crude",
+                    "--orca",
+                ]
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
             ) as outputfile:
@@ -4684,7 +5796,7 @@ class orca_job(qm_job):
             output = "opt-part1.out"
         if not self.boltzmann:
             # convert coord to xyz
-            self.coord2xyz()
+            self.coord, self.nat = coord2xyz(self.workdir)
             # input generation
             ogo_calls = {
                 "b97-3c": [
@@ -4774,16 +5886,16 @@ class orca_job(qm_job):
                 else:
                     for line in thresholds["crude"]:
                         inp.write(line + "\n")
-                if int(args.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
                 if self.solv and self.sm == "smd":
-                    if orca_old:
+                    if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
-                    if orca_new:
+                    else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
                 if self.solv and self.sm == "cpcm":
@@ -4801,7 +5913,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, output), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -4858,12 +5970,12 @@ class orca_job(qm_job):
     def _rrho(self):
         """ ORCA RRHO calculation to free energy in gas phase"""
         if not self.boltzmann:
-            self.coord2xyz()
+            self.coord, self.nat = coord2xyz(self.workdir)
             # input generation
             ofreq_calls = {
                 "b97-3c": [
                     "%MaxCore 8000",
-                    "! def2-mTZVP b97-3c grid4 NumFreq",
+                    "! def2-mTZVP b97-3c grid5 NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -4873,7 +5985,7 @@ class orca_job(qm_job):
                 ],
                 "pbeh-3c": [
                     "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c grid3 NumFreq",
+                    "! def2-mSVP pbeh-3c grid5 NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -4883,7 +5995,7 @@ class orca_job(qm_job):
                 ],
                 "tpss": [
                     "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss grid4 NumFreq",
+                    "! def2-TZVP(-f) tpss grid5 NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -4906,7 +6018,7 @@ class orca_job(qm_job):
                 ],
                 "pbeh-3c": [
                     "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c Opt grid3 NumFreq",
+                    "! def2-mSVP pbeh-3c Opt grid4 NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -4934,9 +6046,9 @@ class orca_job(qm_job):
                     for line in ofreq_calls[self.func]:
                         inp.write(line + "\n")
                 # nprocs
-                if int(args.omp) >= 1:
+                if int(self.progsettings["omp"]) >= 1:
                     inp.write("%pal\n")
-                    inp.write("    nprocs {}\n".format(args.omp))
+                    inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # unpaired, charge, and coordinates
                 inp.write(
@@ -4956,7 +6068,7 @@ class orca_job(qm_job):
             with open(
                 os.path.join(self.workdir, "freq.out"), "w", newline=None
             ) as outputfile:
-                call = [os.path.join(orcapath, "orca"), "inp"]
+                call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inp"]
                 subprocess.call(
                     call,
                     shell=False,
@@ -5011,8 +6123,8 @@ class orca_job(qm_job):
 
     def _nmrJ(self):
         """ORCA NMR coupling calculation"""
-        self.coord2xyz()
-        # generate input   # double hybrids not implemented  # tpss needs for some reason additionally def2/j
+        self.coord, self.nat = coord2xyz(self.workdir)
+        # generate input   # double hybrids not implemented
         nmrj_calls = {
             "tpss": [
                 "%MaxCore 8000",
@@ -5036,9 +6148,19 @@ class orca_job(qm_job):
                 "       print[P_basis] 2",
                 "end",
             ],
+            "pbeh-3c": [
+                "%MaxCore 8000",
+                "! PBEh-3c grid5 rijk def2/jk nofinalgrid nososcf",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
         }
 
-        # 'dsd-blyp': ['%MaxCore 8000', '! dsd-blyp pcJ-0 grid5 rijk def2/jk def2-TZVPP/C nofinalgrid nososcf',
+        # 'dsd-blyp': ['%MaxCore 8000', '! dsd-blyp def2-TZVPP grid5 rijk def2/jk def2-TZVPP/C nofinalgrid nososcf',
         #              '!     smallprint printgap noloewdin', '%output', '       print[P_BondOrder_M] 1',
         #              '       print[P_Mayer] 1', '       print[P_basis] 2', 'end', '%mp2', '    RI true',
         #              '    density relaxed', 'end']
@@ -5050,6 +6172,8 @@ class orca_job(qm_job):
         if self.factive:
             numactive += 1
         if self.pactive:
+            numactive += 1
+        if self.siactive:
             numactive += 1
         with open(os.path.join(self.workdir, "inpJ"), "w", newline=None) as inp:
             # functional
@@ -5080,16 +6204,16 @@ class orca_job(qm_job):
                 inp.write("end\n")
                 inp.write("end\n")
             # nprocs
-            if int(args.omp) >= 1:
+            if int(self.progsettings["omp"]) >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(args.omp))
+                inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
-                if orca_old:
+                if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
-                if orca_new:
+                else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
             if self.solv and self.sm == "cpcm":
@@ -5120,6 +6244,7 @@ class orca_job(qm_job):
                 inp.write(" Nuclei = all C { ssfc }\n")
                 inp.write(" Nuclei = all F { ssfc }\n")
                 inp.write(" Nuclei = all P { ssfc }\n")
+                inp.write(" Nuclei = all Si { ssfc }\n")
             # if self.hactive or self.factive:
             #    if self.cactive or self.pactive or self.factive:
             #        inp.write(' Nuclei = all H { ssfc }\n')
@@ -5143,7 +6268,7 @@ class orca_job(qm_job):
         with open(
             os.path.join(self.workdir, "orcaJ.out"), "w", newline=None
         ) as outputfile:
-            call = [os.path.join(orcapath, "orca"), "inpJ"]
+            call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inpJ"]
             subprocess.call(
                 call,
                 shell=False,
@@ -5174,7 +6299,7 @@ class orca_job(qm_job):
 
     def _nmrS(self):
         """ORCA NMR shielding calculation"""
-        self.coord2xyz()
+        self.coord, self.nat = coord2xyz(self.workdir)
         nmrs_calls = {
             "tpss": [
                 "%MaxCore 8000",
@@ -5198,28 +6323,64 @@ class orca_job(qm_job):
                 "       print[P_basis] 2",
                 "end",
             ],
+            "dsd-blyp": [
+                "%MaxCore 8000",
+                "! dsd-blyp def2-TZVPP grid5 rijcosx def2/j def2-TZVPP/C nofinalgrid nososcf gridx7 nofinalgridx",
+                "!     nofrozencore smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+                "%mp2",
+                "    RI true",
+                "    density relaxed",
+                "end",
+            ],
+            "wb97x": [
+                "%MaxCore 8000",
+                "! wb97x-d3 "
+                + str(self.basis)
+                + " grid5 rijcosx def2/j nofinalgrid nososcf gridx6",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pbeh-3c": [
+                "%MaxCore 8000",
+                "! PBEh-3c grid5 def2/j nofinalgrid nososcf",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
         }
-        # 'dsd-blyp': ['%MaxCore 8000',
-        #          '! dsd-blyp pcSseg-2 grid5 rijcosx def2/j def2-TZVPP/C nofinalgrid nososcf gridx4',
-        #          '!     smallprint printgap noloewdin', '%output', '       print[P_BondOrder_M] 1',
-        #          '       print[P_Mayer] 1', '       print[P_basis] 2', 'end', '%mp2', '    RI true',
-        #          '    density relaxed', 'end'] }
 
         with open(os.path.join(self.workdir, "inpS"), "w", newline=None) as inp:
             # functional
-            for line in nmrs_calls[self.func]:
-                inp.write(line + "\n")
+            try:
+                for line in nmrs_calls[self.func]:
+                    inp.write(line + "\n")
+            except KeyError:
+                print("Error: Functional was not found!")
+                self.success = False
+                return
             # nprocs
-            if args.omp >= 1:
+            if int(self.progsettings["omp"]) >= 1:
                 inp.write("%pal\n")
-                inp.write("    nprocs {}\n".format(args.omp))
+                inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
             if self.solv and self.sm == "smd":
-                if orca_old:
+                if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
-                if orca_new:
+                else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
             if self.solv and self.sm == "cpcm":
@@ -5240,6 +6401,8 @@ class orca_job(qm_job):
                 inp.write(" Nuclei = all F { shift }\n")
             if self.pactive:
                 inp.write(" Nuclei = all P { shift }\n")
+            if self.siactive:
+                inp.write(" Nuclei = all Si { shift }\n")
             inp.write(" origin giao\n")
             inp.write(" giao_2el giao_2el_same_as_scf\n")
             inp.write(" giao_1el giao_1el_analytic\n")
@@ -5254,7 +6417,7 @@ class orca_job(qm_job):
         with open(
             os.path.join(self.workdir, "orcaS.out"), "w", newline=None
         ) as outputfile:
-            call = [os.path.join(orcapath, "orca"), "inpS"]
+            call = [os.path.join(self.progsettings["tempprogpath"], "orca"), "inpS"]
             subprocess.call(
                 call,
                 shell=False,
@@ -5283,6 +6446,88 @@ class orca_job(qm_job):
             )
         return
 
+    def _genericoutput(self):
+        """ORCA READ shielding and coupling constants and write them to plain output"""
+        fnameshield = "orcaS.out"
+        atom = []
+        sigma = []
+        try:
+            with open(
+                os.path.join(self.workdir, fnameshield),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                data = inp.readlines()
+            for line in data:
+                if "CHEMICAL SHIELDING SUMMARY (ppm)" in line:
+                    start = data.index(line)
+            for line in data[(start + 6) :]:
+                splitted = line.split()
+                if len(splitted) == 4:
+                    atom.append(int(splitted[0]) + 1)
+                    sigma.append(float(splitted[2]))
+                else:
+                    break
+        except FileNotFoundError:
+            print(
+                "Missing file: {} in {}".format(
+                    fnameshield, last_folders(self.workdir, 2)
+                )
+            )
+            self.success = False
+        self.success = True
+        fnamecoupl = "orcaJ.out"
+        atom1 = []
+        atom2 = []
+        jab = []
+        try:
+            with open(
+                os.path.join(self.workdir, fnamecoupl),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                data = inp.readlines()
+            for line in data:
+                if "NMR SPIN-SPIN COUPLING CONSTANTS" in line:
+                    start = int(data.index(line)) + 6
+                if " ****ORCA TERMINATED NORMALLY****" in line:
+                    end = int(data.index(line))
+
+            for line in data[start:end]:
+                if "NUCLEUS" in line:
+                    tmpsplitted = line.split()
+                    atom1.append(int(tmpsplitted[4]) + 1)
+                    atom2.append(int(tmpsplitted[9]) + 1)
+                elif "Total" in line and "iso= " in line:
+                    splitted = line.split()
+                    jab.append(float(splitted[5]))
+                else:
+                    pass
+        except FileNotFoundError:
+            print(
+                "Missing file: {} in {}".format(
+                    fnamecoupl, last_folders(self.workdir, 2)
+                )
+            )
+            self.success = False
+        self.success = True
+
+        with open(os.path.join(self.workdir, "nmrprop.dat"), "w", newline=None) as out:
+            for i in range(len(atom)):
+                out.write("{:{digits}} {}\n".format(atom[i], sigma[i], digits=4))
+            for i in range(1, self.nat - len(atom)):
+                out.write("\n")
+            for i in range(len(atom1)):
+                out.write(
+                    "{:{digits}} {:{digits}}   {}\n".format(
+                        atom1[i], atom2[i], jab[i], digits=4
+                    )
+                )
+        time.sleep(0.02)
+        return
+
     def execute(self):
         """Choose what to execute for the jobtype"""
         if self.jobtype == "prep":
@@ -5293,19 +6538,21 @@ class orca_job(qm_job):
         elif self.jobtype == "opt":
             self._opt()
         elif self.jobtype == "xtbopt":
-            self._xtbopt()
+            self._xtbopt(environsettings)
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho()
+            self._xtbrrho(environsettings)
         elif self.jobtype == "rrhoorca":
             self._rrho()
         elif self.jobtype == "solv":
-            self._solv_complete()
+            self._solv_complete(environsettings)
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs()
+            self._gbsa_rs(environsettings)
         elif self.jobtype == "nmrJ":
             self._nmrJ()
         elif self.jobtype == "nmrS":
             self._nmrS()
+        elif self.jobtype == "genericout":
+            self._genericoutput()
         return
 
 
@@ -5335,10 +6582,9 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
     foldername is for existing objects to change the workdir
     results = list of qm_class objects with results from calculations
     """
-    try:
-        tmp = instructdict["jobtype"]
-    except KeyError:
-        raise ("jobtype is missing in instructdict!")
+
+    if instructdict.get("jobtype", None) is None:
+        raise KeyError("jobtype is missing in instructdict!")
 
     cwd = os.getcwd()
     tmp_len = []
@@ -5401,6 +6647,8 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
             print("\nStarting {} Shielding calculations".format(njobs))
         elif instructdict["jobtype"] is "gbsa_gsolv":
             print("\nStarting {} GBSA-Gsolv calculations".format(njobs))
+        elif instructdict["jobtype"] is "genericout":
+            print("\nWriting generic output!")
     time.sleep(0.5)
 
     # start working in parallel
@@ -5598,15 +6846,19 @@ def check_tasks(results, args, thresh=0.25):
 class handle_input:
     """ Read ensorc, write ensorc, write flags.dat"""
 
+    #add read_json write_json at some point, because they should be connected
+
     known_keys = (
         "reference for 1H",
         "reference for 13C",
         "reference for 19F",
         "reference for 31P",
+        "reference for 29Si",
         "1H active",
         "13C active",
         "19F active",
         "31P active",
+        "29Si active",
         "resonance frequency",
         "nconf",
         "charge",
@@ -5686,11 +6938,13 @@ class handle_input:
         "13C active": "cactive",
         "19F active": "factive",
         "31P active": "pactive",
+        "29Si active": "siactive",
         "resonance frequency": "mf",
         "reference for 1H": "href",
         "reference for 13C": "cref",
         "reference for 31P": "pref",
         "reference for 19F": "fref",
+        "reference for 29Si": "siref",
     }
     # später für unittest!
     # print(list(set(known_keys) - set(key_args_dict.keys())))
@@ -5698,12 +6952,14 @@ class handle_input:
     enso_internal_defaults = {
         "reference for 1H": "TMS",
         "reference for 13C": "TMS",
-        "reference for 19F": "default",
-        "reference for 31P": "default",
+        "reference for 19F": "CFCl3",
+        "reference for 31P": "TMP",
+        "reference for 29Si": "TMS",
         "1H active": "on",
         "13C active": "off",
         "19F active": "off",
         "31P active": "off",
+        "29Si active": "off",
         "resonance frequency": "None",
         "nconf": "all",
         "charge": "0",
@@ -5726,21 +6982,21 @@ class handle_input:
         "func3": "pw6b95",
         "basis3": "def2-TZVPP",
         "funcJ": "pbe0",
-        "basisJ": "default",
+        "basisJ": "def2-TZVP",
         "funcS": "pbe0",
-        "basisS": "default",
+        "basisS": "def2-TZVP",
         "couplings": "on",
         "shieldings": "on",
         "part1_threshold": "4.0",
         "part2_threshold": "2.0",
         "sm": "default",
+        "smgsolv2": "sm",
         "sm3": "default",
         "sm4": "default",
         "check": "on",
-        "crestcheck": "on",
+        "crestcheck": "off",
         "maxthreads": "1",
         "omp": "1",
-        "smgsolv2": "cosmors",
     }
     # später für unittest
     # print(list(set(known_keys) - set(enso_internal_defaults.keys())))
@@ -5833,7 +7089,9 @@ class handle_input:
         "x2c-TZVPall-s",
     )
 
-    def __init__(self, solvents, gfnv, func, func3, funcJ, funcS, href, cref):
+    def __init__(
+        self, solvents, gfnv, func, func3, funcJ, funcS, href, cref, fref, pref, siref
+    ):
         self.configdata = {}
         self.value_options = {
             "part1": ("on", "off"),
@@ -5848,7 +7106,7 @@ class handle_input:
             "prog3": ("tm", "orca", "prog"),
             "prog4": ("tm", "orca", "prog"),
             "ancopt": ("on", "off"),
-            "prog_rrho": ("xtb", "prog"),
+            "prog_rrho": ("xtb", "prog", "off"),
             "gfn_version": gfnv,
             "temperature": "temperature in K e.g. 298.15",
             "boltzmann": ("on", "off"),
@@ -5863,12 +7121,14 @@ class handle_input:
             "basisS": self.knownbasissetsS,
             "reference for 1H": href,
             "reference for 13C": cref,
-            "reference for 19F": ("default"),
-            "reference for 31P": ("default"),
+            "reference for 19F": fref,
+            "reference for 31P": pref,
+            "reference for 29Si": siref,
             "1H active": ("on", "off"),
             "13C active": ("on", "off"),
             "19F active": ("on", "off"),
             "31P active": ("on", "off"),
+            "29Si active": ("on", "off"),
             "resonance frequency": "MHz number of your experimental spectrometer",
             "shieldings": ("on", "off"),
             "part1_threshold": "number e.g. 4.0",
@@ -5887,17 +7147,22 @@ class handle_input:
         """ remove any comments from file before parsing with csv.DictReader"""
         for row in csvfile:
             raw = row.split("#")[0].strip()
-            if raw:
-                yield raw
+            raw2 = raw.split("$")[0].strip()
+            if raw2:
+                yield raw2
         return
 
     def _read_config(self, path, test):
-        """ Read from config data from file"""
+        """ Read from config data from file (here flags.dat or .ensorc"""
         configdata = {}
         with open(path, "r") as csvfile:
             # skip header:
-            while not csvfile.readline().startswith(test):
-                pass
+            while True:
+                line = csvfile.readline()
+                if line.startswith(test) or line.startswith("$"):
+                    break
+                else:
+                    pass
             reader = csv.DictReader(
                 self._decomment(csvfile),
                 fieldnames=("key", "value"),
@@ -5963,7 +7228,6 @@ class handle_input:
         """Get absolute paths of programs employed in enso"""
         # read program paths
         print("Reading absolute paths of programs employed in ENSO.")
-        patherror_logic = False
         dbpath = None
         cosmothermversion = None
         cosmorssetup = None
@@ -5973,7 +7237,6 @@ class handle_input:
         mpshiftpath = None
         escfpath = None
         orca_old = None
-        orca_new = None
         orcaversion = None
 
         with open(path, "r") as inp:
@@ -6019,10 +7282,8 @@ class handle_input:
                     tmp = "".join(tmp)
                     if float(tmp) < 4.1:
                         orca_old = True
-                        orca_new = False
                     elif float(tmp) >= 4.1:
                         orca_old = False
-                        orca_new = True
                     orcaversion = tmp
                 except:
                     print("WARNING: could not read ORCA version from " ".ensorc!")
@@ -6062,7 +7323,6 @@ class handle_input:
             mpshiftpath,
             escfpath,
             orca_old,
-            orca_new,
             orcaversion,
         )
 
@@ -6077,7 +7337,7 @@ class handle_input:
                 outdata.write(".ENSORC\n")
                 outdata.write("\n")
                 outdata.write("ORCA: /path/excluding/binary/\n")
-                outdata.write("ORCA version: 4.1\n")
+                outdata.write("ORCA version: 4.2.1\n")
                 outdata.write("GFN-xTB: /path/including/binary/xtb-binary\n")
                 outdata.write("CREST: /path/including/binary/crest-binary\n")
                 outdata.write("mpshift: /path/including/binary/mpshift-binary\n")
@@ -6091,6 +7351,7 @@ class handle_input:
                 )
                 outdata.write("cosmothermversion: 16\n")
                 outdata.write("\n")
+                outdata.write("$ENDPROGRAMS\n\n")
                 outdata.write("#NMR data\n")
                 for item in self.enso_internal_defaults:
                     keylen = len(item)
@@ -6107,7 +7368,19 @@ class handle_input:
         return
 
     def write_flags(
-        self, args, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref
+        self,
+        args,
+        solvents,
+        func,
+        func3,
+        funcJ,
+        funcS,
+        gfnv,
+        href,
+        cref,
+        fref,
+        pref,
+        siref,
     ):
         """ Write file "flags.dat" with restart options"""
         if args.boltzmann == "on":
@@ -6123,7 +7396,8 @@ class handle_input:
                     elif args.sm is None or args.sm == "default":
                         args.sm = "dcosmors"
                         print(
-                            "WARNING: DCOSMO-RS is used as default solvent model with TM."
+                            "WARNING: DCOSMO-RS is used as default solvent model "
+                            "with TM."
                         )
                     else:
                         args.sm = "dcosmors"
@@ -6438,8 +7712,27 @@ class handle_input:
                     digits=40 - len("reference for 13C"),
                 )
             )
-            # inp.write('reference for 19F: {:{digits}} #{}\n'.format(str(args.fref),', '.join(fref),digits=40-len('reference for 19F')))
-            # inp.write('reference for 31P: {:{digits}} #{}\n'.format(str(args.pref),', '.join(pref),digits=40-len('reference for 31P')))
+            inp.write(
+                "reference for 19F: {:{digits}} # {}\n".format(
+                    str(args.fref),
+                    ", ".join(fref),
+                    digits=40 - len("reference for 19F"),
+                )
+            )
+            inp.write(
+                "reference for 31P: {:{digits}} # {}\n".format(
+                    str(args.pref),
+                    ", ".join(pref),
+                    digits=40 - len("reference for 31P"),
+                )
+            )
+            inp.write(
+                "reference for 29Si: {:{digits}} # {}\n".format(
+                    str(args.siref),
+                    ", ".join(siref),
+                    digits=40 - len("reference for 29Si"),
+                )
+            )
             inp.write(
                 "1H active: {:{digits}} # on, off\n".format(
                     str(args.hactive), digits=40 - len("1H active")
@@ -6461,6 +7754,11 @@ class handle_input:
                 )
             )
             inp.write(
+                "29Si active: {:{digits}} # on, off\n".format(
+                    str(args.siactive), digits=40 - len("29Si active")
+                )
+            )
+            inp.write(
                 "resonance frequency: {:{digits}} # integer\n".format(
                     str(args.mf), digits=40 - len("resonance frequency")
                 )
@@ -6479,6 +7777,9 @@ class handle_input:
         funcS,
         href,
         cref,
+        fref,
+        pref,
+        siref,
         path,
         startread,
     ):
@@ -6555,7 +7856,8 @@ class handle_input:
                 except ValueError:
                     if args.part1 == "on":
                         print(
-                            "\nERROR: Can not convert number of conformers (nconf)! Number of conformers has to be "
+                            "\nERROR: Can not convert number of conformers "
+                            "(nconf)! Number of conformers has to be "
                             "an integer or set to all."
                         )
                         error_logical = True
@@ -6564,7 +7866,8 @@ class handle_input:
                 args.chrg = int(self.configdata["charge"])
             except ValueError:
                 print(
-                    "\nERROR: Can not read the charge information! Charge has to be an integer."
+                    "\nERROR: Can not read the charge information! Charge has to"
+                    " be an integer."
                 )
                 error_logical = True
         if "unpaired" in self.configdata:
@@ -6572,8 +7875,8 @@ class handle_input:
                 args.unpaired = int(self.configdata["unpaired"])
             except ValueError:
                 print(
-                    "\nERROR: Can not convert number of unpaired electrons! Number of unpaired electrons has to be "
-                    "an integer."
+                    "\nERROR: Can not convert number of unpaired electrons! Number "
+                    "of unpaired electrons has to be an integer."
                 )
                 error_logical = True
         if "solvent" in self.configdata:
@@ -6593,7 +7896,8 @@ class handle_input:
                 args.prog = self.configdata["prog"]
             else:
                 print(
-                    "\nERROR: Prog is not recognized! Options for the main program are ORCA (orca) or TURBOMOLE (tm)."
+                    "\nERROR: Prog is not recognized! Options for the main "
+                    "program are ORCA (orca) or TURBOMOLE (tm)."
                 )
                 error_logical = True
         if "prog3" in self.configdata:
@@ -6603,7 +7907,8 @@ class handle_input:
                 args.prog3 = args.prog
             else:
                 print(
-                    "\nERROR: Prog3 is not recognized! Options for the main program are ORCA (orca) or TURBOMOLE (tm)."
+                    "\nERROR: Prog3 is not recognized! Options for the main "
+                    "program are ORCA (orca) or TURBOMOLE (tm)."
                 )
                 error_logical = True
         if "prog4" in self.configdata:
@@ -6614,13 +7919,15 @@ class handle_input:
             else:
                 if args.part4 == "on":
                     print(
-                        "\nERROR: Program for part 4 is not recognized! Options are ORCA (orca), TURBOMOLE (tm), "
+                        "\nERROR: Program for part 4 is not recognized! Options "
+                        "are ORCA (orca), TURBOMOLE (tm), "
                         "or the main program (prog)."
                     )
                     error_logical = True
                 else:
                     print(
-                        "\nWARNING: Program for part 4 is not recognized! Options are ORCA (orca), TURBOMOLE (tm), "
+                        "\nWARNING: Program for part 4 is not recognized! Options "
+                        "are ORCA (orca), TURBOMOLE (tm), "
                         "or the main program (prog)."
                     )
         if "ancopt" in self.configdata:
@@ -6628,13 +7935,19 @@ class handle_input:
                 args.ancopt = self.configdata["ancopt"]
             else:
                 print(
-                    "\nWARNING: The use of the ANCOPT-optimizer implemented in GFN-xTB is not recognized! "
-                    "Options are on or off."
+                    "\nWARNING: The use of the ANCOPT-optimizer implemented in "
+                    "GFN-xTB is not recognized! Options are on or off."
                 )
                 error_logical = True
         if "prog_rrho" in self.configdata:
             if self.configdata["prog_rrho"] == "xtb":
                 args.rrhoprog = self.configdata["prog_rrho"]
+            elif self.configdata["prog_rrho"] == "off":
+                args.rrhoprog = self.configdata["prog_rrho"]
+                print(
+                    "WARNING: Thermostatistical contribution to free energy will"
+                    "not be calculated!"
+                )
             elif (
                 self.configdata["prog_rrho"] in ["prog", "orca"] and args.prog == "orca"
             ):
@@ -6646,11 +7959,13 @@ class handle_input:
                 else:
                     args.rrhoprog = "xtb"
                     print(
-                        "WARNING: Currently are only GFN-xTB hessians possible and no TM hessians"
+                        "WARNING: Currently are only GFN-xTB hessians possible "
+                        "and no TM hessians"
                     )
             else:
                 print(
-                    "\nERROR: Program for RRHO contribution in part 2 and 3 (rrhoprog) is not recognized! Options are "
+                    "\nERROR: Program for RRHO contribution in part 2 and 3 "
+                    "(rrhoprog) is not recognized!\n       Options are "
                     "GFN-xTB (xtb) or the main program (prog)."
                 )
                 error_logical = True
@@ -6659,17 +7974,18 @@ class handle_input:
                 args.gfnv = self.configdata["gfn_version"]
             else:
                 print(
-                    "\nWARNING: GFN-xTB version is not recognized! Options are {}.\nGFN2-xTB is used as "
-                    "default.".format(", ".join(gfnv))
+                    "\nWARNING: GFN-xTB version is not recognized! Options are "
+                    "{}.\nGFN2-xTB is used as default.".format(", ".join(gfnv))
                 )
                 args.gfnv = "gfn2"
         if "temperature" in self.configdata:
             try:
-                tmp = float(self.configdata["temperature"])
+                float(self.configdata["temperature"])
                 args.temperature = self.configdata["temperature"]
             except ValueError:
                 print(
-                    '\nWARNING: Temperature "{}" could not be converted to a float! Using 298.15 K instead as default!'.format(
+                    "\nWARNING: Temperature {} could not be converted to a "
+                    "float! Using 298.15 K instead as default!".format(
                         self.configdata["temperature"]
                     )
                 )
@@ -6685,7 +8001,8 @@ class handle_input:
                 args.part4 = "off"
             else:
                 print(
-                    "\nERROR: Boltzmann is not recognized! Options are off for calculating everything or on for "
+                    "\nERROR: Boltzmann is not recognized! Options are off for "
+                    "calculating everything or on for "
                     "calculating only the boltzmann population in part3."
                 )
                 error_logical = True
@@ -6697,9 +8014,9 @@ class handle_input:
                 args.part1 = "off"
             else:
                 print(
-                    "\nERROR: Backup is not recognized! Options are off for the normal procedure or on for "
+                    "\nERROR: Backup is not recognized! Options are off for the "
+                    "normal procedure or on for "
                     "reevaluating the conformers sorted out."
-                    ""
                 )
                 error_logical = True
         if "func" in self.configdata:
@@ -6707,9 +8024,8 @@ class handle_input:
                 args.func = self.configdata["func"]
             else:
                 print(
-                    "\nERROR: Chosen functional for part 1 and 2 (func) is not implemented! Options are {}.".format(
-                        ", ".join(func)
-                    )
+                    "\nERROR: Chosen functional for part 1 and 2 (func) is not "
+                    "implemented! Options are {}.".format(", ".join(func))
                 )
                 error_logical = True
         if "func3" in self.configdata:
@@ -6718,13 +8034,13 @@ class handle_input:
                 if args.prog3 == "tm" and args.func3 != "pw6b95":
                     args.func3 = "pw6b95"
                     print(
-                        "\nWARNING: Only PW6B95 is implemented as functional for part 3 for TM!"
+                        "\nWARNING: Only PW6B95 is implemented as functional for"
+                        " part 3 for TM!"
                     )
             else:
                 print(
-                    "\nERROR: Chosen functional for part 3 (func3) is not implemented! Options are {}.".format(
-                        ", ".join(func3)
-                    )
+                    "\nERROR: Chosen functional for part 3 (func3) is not "
+                    "implemented! Options are {}.".format(", ".join(func3))
                 )
                 error_logical = True
         if "basis3" in self.configdata:
@@ -6732,9 +8048,8 @@ class handle_input:
                 args.basis3 = str(self.configdata["basis3"])
                 if args.basis3 not in self.knownbasissets3:
                     print(
-                        "WARNING! Basis for part3: {} is used but could not be checked for correct input!".format(
-                            args.basis3
-                        )
+                        "WARNING! Basis for part3: {} is used but could not be "
+                        "checked for correct input!".format(args.basis3)
                     )
             except:
                 print("\nERROR: Can not read in basis set for part 3 (basis3)!")
@@ -6747,16 +8062,6 @@ class handle_input:
                     '\nERROR: Couplings is not recognized! Options are "on" or "off".'
                 )
                 error_logical = True
-        if "funcJ" in self.configdata:
-            if self.configdata["funcJ"] in funcJ:
-                args.funcJ = self.configdata["funcJ"]
-            else:
-                print(
-                    "\nERROR: Chosen functional for coupling calculation (funcJ) is not implemented! Options are {}.".format(
-                        ", ".join(funcJ)
-                    )
-                )
-                error_logical = True
         if "basisJ" in self.configdata:
             try:
                 args.basisJ = str(self.configdata["basisJ"])
@@ -6766,31 +8071,30 @@ class handle_input:
                 )
                 error_logical = True
             if args.basisJ == "default":
-                if args.prog4 == "tm":
-                    args.basisJ = "def2-TZVP"
-                elif args.prog4 == "orca":
-                    args.basisJ = "pcJ-0"
+                args.basisJ = "def2-TZVP"
             if args.basisJ not in self.knownbasissetsJ:
                 print(
-                    "WARNING! Basis for coupling calculation: {} is used but could not be checked for correct "
+                    "WARNING! Basis for coupling calculation: {} is used but "
+                    "could not be checked for correct "
                     "input!".format(args.basisJ)
                 )
+        if "funcJ" in self.configdata:
+            if self.configdata["funcJ"] in funcJ:
+                args.funcJ = self.configdata["funcJ"]
+            else:
+                print(
+                    "\nERROR: Chosen functional for coupling calculation (funcJ)"
+                    " is not implemented! Options are {}.".format(", ".join(funcJ))
+                )
+                error_logical = True
+            if self.configdata["funcJ"] == "pbeh-3c":
+                args.basisJ = "def2-mSVP"
         if "shieldings" in self.configdata:
             if self.configdata["shieldings"] in ["on", "off"]:
                 args.calcS = self.configdata["shieldings"]
             else:
                 print(
                     '\nERROR: Shieldings is not recognized! Options are "on" or "off".'
-                )
-                error_logical = True
-        if "funcS" in self.configdata:
-            if self.configdata["funcS"] in funcS:
-                args.funcS = self.configdata["funcS"]
-            else:
-                print(
-                    "\nERROR: Chosen functional for shielding calculation (funcS) is not implemented! Options are {}.".format(
-                        ", ".join(funcS)
-                    )
                 )
                 error_logical = True
         if "basisS" in self.configdata:
@@ -6802,15 +8106,31 @@ class handle_input:
                 )
                 error_logical = True
             if args.basisS == "default":
-                if args.prog4 == "tm":
-                    args.basisS = "def2-TZVP"
-                elif args.prog4 == "orca":
-                    args.basisS = "pcSseg-2"
+                args.basisS = "def2-TZVP"
             if args.basisS not in self.knownbasissetsS:
                 print(
                     "WARNING! Basis for shielding calculation: {} is used but could not be checked for correct "
                     "input!".format(args.basisS)
                 )
+        if "funcS" in self.configdata:
+            if self.configdata["funcS"] in funcS:
+                args.funcS = self.configdata["funcS"]
+                if args.funcS == "dsd-blyp" and args.prog4 == "tm":
+                    print(
+                        "\nError: DSD-BLYP for shielding calculations is only "
+                        "possible with ORCA!"
+                    )
+                    error_logical = True
+            else:
+                print(
+                    "\nERROR: Chosen functional for shielding calculation (funcS)"
+                    " is not implemented! Options are {}.".format(", ".join(funcS))
+                )
+                error_logical = True
+                if args.debug:
+                    args.funcS = self.configdata["funcS"]
+            if self.configdata["funcS"] == "pbeh-3c":
+                args.basisS = "def2-mSVP"
         if "part1_threshold" in self.configdata:
             try:
                 args.thr1 = float(self.configdata["part1_threshold"])
@@ -6871,7 +8191,8 @@ class handle_input:
             else:
                 args.gsolv2 = args.sm
                 print(
-                    "WARNING: Solvent model for gsolv contribution of part 2 is not recognized! The same solvent "
+                    "WARNING: Solvent model for gsolv contribution of part 2 is "
+                    "not recognized! The same solvent "
                     "model as for the optimizations in part 2 is used: {}.".format(
                         args.gsolv2
                     )
@@ -6879,7 +8200,7 @@ class handle_input:
         if "sm3" in self.configdata:
             if args.solv is None:
                 args.sm3 = None
-            elif args.prog == "orca":
+            elif args.prog3 == "orca":
                 if self.configdata["sm3"] in ("cosmors", "smd", "gbsa_gsolv"):
                     args.sm3 = self.configdata["sm3"]
                 elif self.configdata["sm3"] == "default":
@@ -6890,7 +8211,7 @@ class handle_input:
                         "WARNING: Solvent model for part 3 is not recognized! Options are SMD (smd) or COSMO-RS "
                         "(cosmors) for ORCA. Solvent model for part 3 is set to SMD."
                     )
-            elif args.prog == "tm":
+            elif args.prog3 == "tm":
                 if self.configdata["sm3"] in ("cosmors", "dcosmors", "gbsa_gsolv"):
                     args.sm3 = self.configdata["sm3"]
                 elif self.configdata["sm3"] == "default":
@@ -6905,12 +8226,27 @@ class handle_input:
             if args.solv is None:
                 args.sm4 = None
             elif args.prog4 == "tm":
-                args.sm4 = "cosmo"
+                if self.configdata["sm4"] in ("dcosmors", "cosmo"):
+                    args.sm4 = self.configdata["sm4"]
+                elif self.configdata["sm4"] == "default":
+                    args.sm4 = "dcosmors"
+                else:
+                    args.sm4 = "dcosmors"
+                    print(
+                        "WARNING: solvent model for part 4 is not recognized! Options are DCOSMO-RS (dcosmors) "
+                        "or COSMO for TM. Solvent model for part 4 is set to DCOSMO-RS."
+                    )
             elif args.prog4 == "orca":
-                if self.configdata["sm4"] == "smd":
+                if self.configdata["sm4"] in ("smd", "cpcm"):
+                    args.sm4 = self.configdata["sm4"]
+                elif self.configdata["sm4"] == "default":
                     args.sm4 = "smd"
                 else:
-                    args.sm4 = "cpcm"
+                    args.sm4 = "smd"
+                    print(
+                        "WARNING: Solvent model for part 4 is not recognized! Options are SMD (smd) or CPCM "
+                        "for ORCA. Solvent model for part 4 is set to SMD."
+                    )
         if "check" in self.configdata:
             if self.configdata["check"] == "on":
                 args.check = True
@@ -6968,7 +8304,40 @@ class handle_input:
                     )
                 )
                 args.cref = "TMS"
-        # here 19 F and 31 P
+        if "reference for 19F" in self.configdata:
+            if self.configdata["reference for 19F"] in fref:
+                args.fref = self.configdata["reference for 19F"]
+            elif self.configdata["reference for 19F"] == "default":
+                args.fref = "CFCl3"
+            else:
+                print(
+                    "\nWARNING: Reference for 19F is not implemented! Choices are {}. CFCl3 is used.".format(
+                        ", ".join(fref)
+                    )
+                )
+                args.fref = "CFCl3"
+        if "reference for 31P" in self.configdata:
+            if self.configdata["reference for 31P"] in pref:
+                args.pref = self.configdata["reference for 31P"]
+            elif self.configdata["reference for 31P"] == "default":
+                args.pref = "TMP"
+            else:
+                print(
+                    "\nWARNING: Reference for 31P is not implemented! Choices are {}. TMP is used.".format(
+                        ", ".join(pref)
+                    )
+                )
+                args.pref = "TMP"
+        if "reference for 29Si" in self.configdata:
+            if self.configdata["reference for 29Si"] in siref:
+                args.siref = self.configdata["reference for 29Si"]
+            else:
+                print(
+                    "\nWARNING: Reference for 29Si is not implemented! Choices are {}. TMS is used.".format(
+                        ", ".join(siref)
+                    )
+                )
+                args.siref = "TMS"
         if "1H active" in self.configdata:
             if self.configdata["1H active"] == "on":
                 args.hactive = self.configdata["1H active"]
@@ -7014,6 +8383,17 @@ class handle_input:
                 print(
                     "\nWARNING: Can not read 31P active! Data for 31P NMR spectrum is not calculated."
                 )
+        if "29Si active" in self.configdata:
+            if self.configdata["29Si active"] == "on":
+                args.siactive = self.configdata["29Si active"]
+                spectrumlist.append("29Si")
+            elif self.configdata["29Si active"] == "off":
+                args.siactive = self.configdata["29Si active"]
+            else:
+                args.siactive = "off"
+                print(
+                    "\nWARNING: Can not read 31P active! Data for 31P NMR spectrum is not calculated."
+                )
         if "resonance frequency" in self.configdata:
             try:
                 args.mf = int(self.configdata["resonance frequency"])
@@ -7023,13 +8403,13 @@ class handle_input:
                     "\nWARNING: Can not convert resonance frequency! Flag -mf has to be set while executing the "
                     "anmr program."
                 )
-        if error_logical:
+        if error_logical and not args.debug:
             print("Going to exit due to input errors!")
             sys.exit(1)
         return spectrumlist
 
 
-def check_for_folder(conflist, functional):
+def check_for_folder(conflist, functional, debug):
     """Check if folders exist (of conformers calculated in previous run) """
     error_logical = False
     for i in conflist:
@@ -7041,7 +8421,7 @@ def check_for_folder(conflist, functional):
                 )
             )
             error_logical = True
-    if error_logical:
+    if error_logical and not debug:
         print("One or multiple directories are missing.")
         write_json("save_and_exit", json_dict, jsonfile)
     return
@@ -7097,13 +8477,13 @@ def rrho_part23(
     if args.solv and args.rrhoprog == "orca":
         print(
             "WARNING: ORCA RRHO calculation with solvation correction is currently not "
-            "implemented! For a RRHO contribution in solution, please use GFN-xTB."
+            "implemented! \nFor a RRHO contribution in solution, please use GFNn-xTB."
             "\nRRHO is calculated in the gas phase.\n"
         )
     elif args.solv and args.rrhoprog == "tm":
         print(
             "WARNING: TM RRHO calculation with solvation correction is currently not "
-            "implemented! For a RRHO contribution in solution, please use GFN-xTB."
+            "implemented! \nFor a RRHO contribution in solution, please use GFNn-xTB."
             "\nRRHO is calculated in the gas phase.\n"
         )
     tmp_results = []
@@ -7160,7 +8540,8 @@ def rrho_part23(
     if len(results) > 0:
         if args.rrhoprog == "xtb":
             # set omp num threads for GFN-xTB calculation
-            os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            # os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            environsettings["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
         # create new folder and copy optimized coord file in CONFx/rrho
         print("Setting up new directories.")
         for conf in list(results):
@@ -7206,17 +8587,23 @@ def rrho_part23(
             "func": args.func,
             "solv": args.solv,
             "boltzmann": args.boltzmann,
+            "temperature": args.temperature,
+            "progsettings": {"omp": args.omp, "tempprogpath": ""},
         }
         if args.rrhoprog == "xtb":
             instructrrho["jobtype"] = "rrhoxtb"
             instructrrho["func"] = "GFN-xTB"
             instructrrho["gfnv"] = args.gfnv
+            instructrrho["progsettings"]["tempprogpath"] = ""
+            instructrrho["progsettings"]["xtbpath"] = xtbpath
         elif args.rrhoprog == "orca":
             instructrrho["jobtype"] = "rrhoorca"
             instructrrho["func"] = args.func
+            instructrrho["progsettings"]["tempprogpath"] = orcapath
         elif args.rrhoprog == "tm":
             instructrrho["jobtype"] = "rrhotm"
             instructrrho["func"] = args.func
+            instructrrho["progsettings"]["tempprogpath"] = ""
 
         results = run_in_parallel(
             q, resultq, job, maxthreads, results, instructrrho, "rrho"
@@ -7435,8 +8822,14 @@ def additive_gsolv(
                 "chrg": args.chrg,
                 "unpaired": args.unpaired,
                 "solv": args.solv,
-                "cosmorssetup": cosmorssetup,
                 "boltzmann": args.boltzmann,
+                "temperature": args.temperature,
+                "progsettings": {
+                    "omp": args.omp,
+                    "tempprogpath": "",
+                    "cosmorssetup": cosmorssetup,
+                    "cosmothermversion": cosmothermversion,
+                },
             }
         elif js_smodel == "gbsa_gsolv":
             instructsolv = {
@@ -7446,6 +8839,12 @@ def additive_gsolv(
                 "solv": args.solv,
                 "gfnv": args.gfnv,
                 "boltzmann": args.boltzmann,
+                "temperature": args.temperature,
+                "progsettings": {
+                    "omp": args.omp,
+                    "tempprogpath": xtbpath,
+                    "xtbpath": xtbpath,
+                },
             }
         results = run_in_parallel(
             q, resultq, job, maxthreads, results, instructsolv, folder
@@ -7534,6 +8933,7 @@ def enso_startup(cwd):
     impsolvents = (
         "acetone",
         "chcl3",
+        "acetonitrile",
         "ch2cl2",
         "dmso",
         "h2o",
@@ -7542,28 +8942,28 @@ def enso_startup(cwd):
         "toluene",
         "gas",
     )
-    impfunc = ("pbeh-3c", "b97-3c", "tpss")  # pbe0
-    impfunc3 = ("pw6b95", "wb97x", "dsd-blyp")  # pbe0
-    impfuncJ = ("tpss", "pbe0")
-    impfuncS = ("tpss", "pbe0")
+    impfunc = ("pbeh-3c", "b97-3c", "tpss")
+    impfunc3 = ("pw6b95", "wb97x", "dsd-blyp")
+    impfuncJ = ("tpss", "pbe0", "pbeh-3c")
+    impfuncS = ("tpss", "pbe0", "dsd-blyp", "pbeh-3c")
     impgfnv = ("gfn1", "gfn2")
-    imphref = ("TMS", "DSS")
-    impcref = ("TMS", "DSS")
+    imphref = ("TMS",)
+    impcref = ("TMS",)
     impfref = ("CFCl3",)
-    imppref = ("TMP/PH3",)
+    imppref = ("TMP", "PH3")
+    impsiref = ("TMS",)
     orca_old = False
-    orca_new = False
 
     descr = """
      __________________________________________________
     |                                                  |
     |                                                  |
     |                       ENSO -                     |
-    |         energetic sorting of CREST CRE           |
+    |          energetic sorting of CREST CRE          |
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 1.271                  |
+    |                   version 1.300                  |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|"""
@@ -7580,6 +8980,7 @@ def enso_startup(cwd):
         impcref,
         impfref,
         imppref,
+        impsiref,
     )
     print(descr + "\n")  # print header
 
@@ -7599,10 +9000,11 @@ def enso_startup(cwd):
     mpshiftpath = ""
     escfpath = ""
     cosmorssetup = ""
-    hactive = "off"
-    cactive = "off"
-    factive = "off"
-    pactive = "off"
+    # hactive = "off"
+    # cactive = "off"
+    # factive = "off"
+    # pactive = "off"
+    # siactive = "off"
     spectrumlist = []
 
     if args.writeensorc:
@@ -7615,6 +9017,9 @@ def enso_startup(cwd):
             impfuncS,
             imphref,
             impcref,
+            impfref,
+            imppref,
+            impsiref,
         )
         ensorcsettings.write_ensorc()
         print(
@@ -7635,6 +9040,9 @@ def enso_startup(cwd):
             impfuncS,
             imphref,
             impcref,
+            impfref,
+            imppref,
+            impsiref,
         )
         (
             dbpath,
@@ -7646,7 +9054,6 @@ def enso_startup(cwd):
             mpshiftpath,
             escfpath,
             orca_old,
-            orca_new,
             orcaversion,
         ) = ensorcsettings.read_program_paths(ensorc)
         print("\nThe following pathways were read in:")
@@ -7693,6 +9100,7 @@ def enso_startup(cwd):
             impcref,
             impfref,
             imppref,
+            impsiref,
         )
     elif (
         args.run or args.checkinput
@@ -7706,6 +9114,9 @@ def enso_startup(cwd):
             impfuncS,
             imphref,
             impcref,
+            impfref,
+            imppref,
+            impsiref,
         )
         spectrumlist = flagsdata.read_flags(
             args,
@@ -7717,6 +9128,9 @@ def enso_startup(cwd):
             impfuncS,
             imphref,
             impcref,
+            impfref,
+            imppref,
+            impsiref,
             "flags.dat",
             "FLAGS",
         )
@@ -7785,10 +9199,7 @@ def enso_startup(cwd):
         elif shutil.which(os.path.join(orcapath, "orca")) is None:
             print("\nERROR: path for ORCA is not correct!")
             error_logical = True
-        if orca_new is None or orca_old is None:
-            print("\nERROR: ORCA version was not found!")
-            error_logical = True
-        elif orca_new is False and orca_old is False:
+        if orca_old is None:
             print("\nERROR: ORCA version was not found!")
             error_logical = True
     if args.rrhoprog == "xtb" or args.ancopt == "on":
@@ -7827,7 +9238,7 @@ def enso_startup(cwd):
         else:
             print("\nERROR: COSMOtherm has not been found!")
             error_logical = True
-    settings = os.environ
+    environsettings = os.environ
     if (
         args.prog == "tm"
         or args.prog3 == "tm"
@@ -7837,12 +9248,12 @@ def enso_startup(cwd):
     ):
         # preparation of parallel calculation with TM
         try:
-            if settings["PARA_ARCH"] == "SMP":
+            if environsettings["PARA_ARCH"] == "SMP":
                 try:
-                    settings["PARNODES"] = str(args.omp)
+                    environsettings["PARNODES"] = str(args.omp)
                     print(
                         "PARNODES for TM or COSMO-RS calculation was set "
-                        "to {}".format(settings["PARNODES"])
+                        "to {}".format(environsettings["PARNODES"])
                     )
                 except:
                     print("\nERROR: PARNODES can not be changed!")
@@ -7882,10 +9293,7 @@ def enso_startup(cwd):
                 )
         else:
             args.fref = "CFCl3"
-            if args.solv is None or args.solv == "toluene":
-                args.pref = "PH3"
-            else:
-                args.pref = "TMP"
+            args.pref = "TMP"
 
     if error_logical and not args.debug:
         print("\nERROR: ENSO can not continue due to input errors!" "\nGoing to exit!")
@@ -8185,6 +9593,11 @@ def enso_startup(cwd):
             )
         )
         print(
+            "reference for 29Si: {:{digits}} {}".format(
+                "", str(args.siref), digits=digilen - len("reference for 29Si")
+            )
+        )
+        print(
             "resonance frequency: {:{digits}} {}".format(
                 "", str(args.mf), digits=digilen - len("resonance frequency")
             )
@@ -8208,6 +9621,7 @@ def enso_startup(cwd):
     jsonfile = "enso.json"
     json_dict, firstrun = read_json(args.nstruc, cwd, jsonfile, args)
     if args.checkinput:
+        write_json("save", json_dict, jsonfile)
         print(
             "Input check is finished. The ENSO program can be executed with "
             "the flag -run.\n"
@@ -8223,12 +9637,11 @@ def enso_startup(cwd):
         nat,
         maxthreads,
         xtbpath,
-        settings,
+        environsettings,
         dbpath,
         cosmothermversion,
         cosmorssetup,
         orcapath,
-        orca_new,
         orca_old,
         crestpath,
         mpshiftpath,
@@ -8237,7 +9650,9 @@ def enso_startup(cwd):
     )
 
 
-def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, settings):
+def part1(
+    args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, environsettings
+):
     """ Run crude optimization"""
     save_errors = (
         []
@@ -8343,7 +9758,9 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
             print("No conformers are considered additionally.")
 
         # check if directories for conformers exist
-        check_for_folder(["CONF" + str(i) for i in old_confs_list], args.func)
+        check_for_folder(
+            ["CONF" + str(i) for i in old_confs_list], args.func, args.debug
+        )
 
         if len(new_confs_list) > 0:
             directories = new_folders(new_confs_list, args.func, save_errors)
@@ -8367,6 +9784,13 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "func": args.func,
                 "solv": args.solv,
                 "sm": args.sm,
+                "omp": args.omp,
+                "progsettings": {
+                    "tempprogpath": "",
+                    "xtbpath": xtbpath,
+                    "orca_old": orca_old,
+                    "omp": args.omp,
+                },
             }
             results = run_in_parallel(
                 q, resultq, job, maxthreads, directories, instructprep, args.func
@@ -8406,11 +9830,18 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": False,
+                "progsettings": {"omp": args.omp, "tempprogpath": ""},
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
+                instructopt["progsettings"]["xtbpath"] = xtbpath
             else:
                 instructopt["jobtype"] = "opt"
+            if job == tm_job:
+                instructopt["progsettings"]["tempprogpath"] = ""
+            elif job == orca_job:
+                instructopt["progsettings"]["tempprogpath"] = orcapath
+                instructopt["progsettings"]["orca_old"] = orca_old
 
             results = run_in_parallel(
                 q, resultq, job, maxthreads, results, instructopt, args.func
@@ -8448,8 +9879,6 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
             # all conformers were already calculated
             results = []
         # adding conformers calculated before to results
-        # get GFN-xTB energies
-        gfne = conformersxyz2coord(conformersxyz, nat, args.func, all_confs_list)
         try:
             length = max([len(str(x)) for x in old_confs_list]) + 4
         except ValueError:
@@ -8471,6 +9900,8 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
         if len(results) == 0:
             print("ERROR: No conformer left!")
             write_json("save_and_exit", json_dict, jsonfile)
+        # get GFN-xTB energies
+        gfne = conformersxyz2coord(conformersxyz, nat, args.func, all_confs_list, True)
         # calculate relative energies for each conformer with GFN-xTB and DFT
         for i in results:
             for item in gfne:
@@ -8549,8 +9980,9 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
                 "", digits=length
             )
         )
+        lowestenergy = min([item.energy for item in results if item.energy is not None])
         for i in results:
-            if i.rel_energy != 0.00:
+            if i.energy != lowestenergy:
                 print(
                     "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}".format(
                         i.name,
@@ -8648,7 +10080,9 @@ def part1(args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, se
     return results, json_dict
 
 
-def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings):
+def part2(
+    args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
+):
     """ """
     print("-----------------------------------------------------------")
     print(" PART 2 - optimizations and low level free energy")
@@ -8859,7 +10293,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             print("Considered conformers:")
             print_block([i.name for i in results])
 
-        check_for_folder([i.name for i in tmp_results], args.func)
+        check_for_folder([i.name for i in tmp_results], args.func, args.debug)
 
         # setup queues
         q = Queue()
@@ -8901,6 +10335,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": args.sm,
+                    "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
 
                 results = run_in_parallel(
@@ -8942,11 +10377,18 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": True,
+                "progsettings": {"omp": args.omp, "tempprogpath": ""},
             }
             if args.ancopt == "on":
                 instructopt["jobtype"] = "xtbopt"
+                instructopt["progsettings"]["xtbpath"] = xtbpath
             else:
                 instructopt["jobtype"] = "opt"
+            if job == tm_job:
+                instructopt["progsettings"]["tempprogpath"] = ""
+            elif job == orca_job:
+                instructopt["progsettings"]["tempprogpath"] = orcapath
+                instructopt["progsettings"]["orca_old"] = orca_old
 
             results = run_in_parallel(
                 q, resultq, job, maxthreads, results, instructopt, args.func
@@ -9082,6 +10524,7 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructprep, args.func
@@ -9133,7 +10576,14 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
+                if job == tm_job:
+                    instructsp["progsettings"]["tempprogpath"] = ""
+                elif job == orca_job:
+                    instructsp["progsettings"]["tempprogpath"] = orcapath
+                    instructsp["progsettings"]["orca_old"] = orca_old
+
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructsp, args.func
                 )
@@ -9219,23 +10669,27 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             print("Gsolv values are included in the optimizations.")
         elif not args.solv:
             print("Since calculation is in the gas phase, Gsolv is not required.")
-
-        # run RRHO
-        results, save_errors = rrho_part23(
-            args,
-            q,
-            resultq,
-            job,
-            True,
-            False,
-            results,
-            json_dict,
-            jsonfile,
-            save_errors,
-            digilen,
-            cwd,
-        )
-
+        if not args.rrhoprog == "off":
+            # run RRHO
+            results, save_errors = rrho_part23(
+                args,
+                q,
+                resultq,
+                job,
+                True,
+                False,
+                results,
+                json_dict,
+                jsonfile,
+                save_errors,
+                digilen,
+                cwd,
+            )
+        else:
+            # skipp RRHO calculation:
+            for conf in results:
+                conf.rrho = 0.0
+            # enso.json will not be updated with rrho information!
         for i in results:  # calculate free energy
             if (
                 i.energy is not None
@@ -9246,8 +10700,8 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             else:
                 # something went wrong and we do not know what, so reset everything
                 print(
-                    "The conformer {} was removed because the free energy could not be calculated!"
-                    "{}: energy: {}, rrho: {}, gsolv: {}.".format(
+                    "The conformer {} was removed because the free energy could "
+                    "not be calculated! {}: energy: {}, rrho: {}, gsolv: {}.".format(
                         i.name, i.name, i.energy, i.rrho, i.gsolv
                     )
                 )
@@ -9310,8 +10764,11 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 "CONF#", "E [Eh]", digits=length
             )
         )
+        lowestfree = min(
+            [item.free_energy for item in results if item.free_energy is not None]
+        )
         for i in results:
-            if i.rel_free_energy != 0.00:
+            if i.free_energy != lowestfree:
                 print(
                     "{:{digits}}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
                         i.name,
@@ -9410,7 +10867,9 @@ def part2(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
     return results, json_dict, rotdict
 
 
-def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings):
+def part3(
+    args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
+):
     """ """
     save_errors = []
     print("-----------------------------------------------------------")
@@ -9442,7 +10901,8 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             )
         )
         if args.rrhoprog == "xtb":
-            os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            # os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
+            environsettings["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
             print(
                 "number of cores used by xtb: {:{digits}} {}".format(
                     "", args.omp, digits=digilen - len("number of cores used by xtb")
@@ -9685,7 +11145,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                 print_block([i.name for i in results])
             if not args.boltzmann:
                 # check if directories of conformers calculated before exist,
-                check_for_folder([i.name for i in tmp_results], args.func)
+                check_for_folder([i.name for i in tmp_results], args.func, args.debug)
 
                 # setup queues
                 q = Queue()
@@ -9765,6 +11225,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "sm": "gas",
                         "boltzmann": args.boltzmann,
+                        "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
                     if args.sm3 == "smd" and args.solv:
                         instructprep["sm"] = "smd"  # solvation consider during SP
@@ -9814,7 +11275,14 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                         "solv": args.solv,
                         "basis": args.basis3,
                         "boltzmann": args.boltzmann,
+                        "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
+                    if job == tm_job:
+                        instructsp["progsettings"]["tempprogpath"] = ""
+                    elif job == orca_job:
+                        instructsp["progsettings"]["tempprogpath"] = orcapath
+                        instructsp["progsettings"]["orca_old"] = orca_old
+
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, args.func3
                     )
@@ -9902,23 +11370,27 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
                             "Since the calculation is performed in gas phase, Gsolv is not required.\n"
                         )
 
-                #
-                # run RRHO
-                results, save_errors = rrho_part23(
-                    args,
-                    q,
-                    resultq,
-                    job,
-                    False,
-                    True,
-                    results,
-                    json_dict,
-                    jsonfile,
-                    save_errors,
-                    digilen,
-                    cwd,
-                )
-
+                if not args.rrhoprog == "off":
+                    # run RRHO
+                    results, save_errors = rrho_part23(
+                        args,
+                        q,
+                        resultq,
+                        job,
+                        False,
+                        True,
+                        results,
+                        json_dict,
+                        jsonfile,
+                        save_errors,
+                        digilen,
+                        cwd,
+                    )
+                else:
+                    # skipp RRHO calculation:
+                    for conf in results:
+                        conf.rrho = 0.0
+                    # enso.json will not be updated with rrho information!
             for i in results:  # calculate free energy
                 if (
                     i.energy is not None
@@ -9993,8 +11465,11 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
             print(
                 "CONF#          E [Eh]       Gsolv [Eh]   RRHO [Eh]    Gtot [Eh]    rel. Gtot [kcal/mol]]\n"
             )
+            lowestfree = min(
+                [item.free_energy for item in results if item.free_energy is not None]
+            )
             for i in results:
-                if i.rel_free_energy != 0.00:
+                if i.free_energy != lowestfree:
                     print(
                         "{:10}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
                             i.name,
@@ -10027,7 +11502,7 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
 
             print("Calculate Boltzmann populations")
             au2J = 4.3597482e-18  # a.u.(hartree/mol) to J
-            kcalmol2J = 7.993840458653155e-21  # kcal/mol to J  =   *4.184 / N_{A}
+            # kcalmol2J = 7.993840458653155e-21  # kcal/mol to J  =   *4.184 / N_{A}
             kb = 1.3806485279e-23  # J/K
             try:
                 T = float(args.temperature)
@@ -10121,15 +11596,11 @@ def part3(args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
         move_recursively(cwd, "anmr_enso")
         write_anmr_enso(cwd, results)
 
-        # write trj-part3.xyz
-        if os.path.isfile(os.path.join(cwd, "trj-part3.xyz")):
-            shutil.move(
-                os.path.join(cwd, "trj-part3.xyz"), os.path.join(cwd, "trj-part3.1")
-            )
-        move_recursively(cwd, "trj-part3")
+        # write populated confs from part3
+        move_recursively(cwd, "populated-conf-part3.xyz")
         write_trj(
             sorted(results, key=lambda x: float(x.free_energy)),
-            "trj-part3.xyz",
+            "populated-conf-part3.xyz",
             args.func,
         )
 
@@ -10161,9 +11632,11 @@ def part4(
     json_dict,
     maxthreads,
     xtbpath,
-    settings,
+    environsettings,
     rotdict,
     spectrumlist,
+    escfpath,
+    mpshiftpath,
 ):
     """ """
     save_errors = []
@@ -10308,6 +11781,13 @@ def part4(
                     "", str(args.pref), digits=digilen - len("reference for 31P")
                 )
             )
+        if "29Si" in spectrumlist:
+            print(
+                "reference for 29Si: {:{digits}} {}".format(
+                    "", str(args.siref), digits=digilen - len("reference for 29Si")
+                )
+            )
+
         print(
             "resonance frequency: {:{digits}} {}".format(
                 "", str(args.mf), digits=digilen - len("resonance frequency")
@@ -10498,6 +11978,7 @@ def part4(
                         "solv": args.solv,
                         "sm": args.sm4,
                         "NMR": True,
+                        "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
                     if args.hactive == "on":
                         instructprep["hactive"] = True
@@ -10507,7 +11988,8 @@ def part4(
                         instructprep["factive"] = True
                     if args.pactive == "on":
                         instructprep["pactive"] = True
-
+                    if args.siactive == "on":
+                        instructprep["siactive"] = True
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructprep, "NMR"
                     )
@@ -10549,7 +12031,14 @@ def part4(
                         "func": args.funcJ,
                         "solv": args.solv,
                         "basis": args.basisJ,
+                        "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
+                    if job == tm_job:
+                        instructsp["progsettings"]["tempprogpath"] = ""
+                    elif job == orca_job:
+                        instructsp["progsettings"]["tempprogpath"] = orcapath
+                        instructsp["progsettings"]["orca_old"] = orca_old
+
                     results = run_in_parallel(
                         q, resultq, job, maxthreads, results, instructsp, "NMR"
                     )
@@ -10613,6 +12102,7 @@ def part4(
                     "basis": args.basisJ,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "progsettings": {"omp": args.omp},
                 }
                 if args.hactive == "on":
                     instructJ["hactive"] = True
@@ -10622,6 +12112,13 @@ def part4(
                     instructJ["factive"] = True
                 if args.pactive == "on":
                     instructJ["pactive"] = True
+                if args.siactive == "on":
+                    instructJ["siactive"] = True
+                if job == tm_job:
+                    instructJ["progsettings"]["tempprogpath"] = escfpath
+                elif job == orca_job:
+                    instructJ["progsettings"]["tempprogpath"] = orcapath
+                    instructJ["progsettings"]["orca_old"] = orca_old
 
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructJ, "NMR"
@@ -10833,6 +12330,7 @@ def part4(
                             "solv": args.solv,
                             "sm": args.sm4,
                             "NMR": True,
+                            "progsettings": {"omp": args.omp, "tempprogpath": ""},
                         }
                         if args.hactive == "on":
                             instructprep["hactive"] = True
@@ -10842,7 +12340,8 @@ def part4(
                             instructprep["factive"] = True
                         if args.pactive == "on":
                             instructprep["pactive"] = True
-
+                        if args.siactive == "on":
+                            instructprep["siactive"] = True
                         results = run_in_parallel(
                             q, resultq, job, maxthreads, results, instructprep, "NMR"
                         )
@@ -10887,7 +12386,13 @@ def part4(
                             "func": args.funcS,
                             "solv": args.solv,
                             "basis": args.basisS,
+                            "progsettings": {"omp": args.omp, "tempprogpath": ""},
                         }
+                        if job == tm_job:
+                            instructsp["progsettings"]["tempprogpath"] = ""
+                        elif job == orca_job:
+                            instructsp["progsettings"]["tempprogpath"] = orcapath
+                            instructsp["progsettings"]["orca_old"] = orca_old
                         results = run_in_parallel(
                             q, resultq, job, maxthreads, results, instructsp, "NMR"
                         )
@@ -10951,6 +12456,7 @@ def part4(
                     "basis": args.basisS,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
                 if args.hactive == "on":
                     instructS["hactive"] = True
@@ -10960,6 +12466,13 @@ def part4(
                     instructS["factive"] = True
                 if args.pactive == "on":
                     instructS["pactive"] = True
+                if args.siactive == "on":
+                    instructS["siactive"] = True
+                if job == tm_job:
+                    instructS["progsettings"]["tempprogpath"] = mpshiftpath
+                elif job == orca_job:
+                    instructS["progsettings"]["tempprogpath"] = orcapath
+                    instructS["progsettings"]["orca_old"] = orca_old
 
                 results = run_in_parallel(
                     q, resultq, job, maxthreads, results, instructS, "NMR"
@@ -10992,8 +12505,18 @@ def part4(
                             fail_rate
                         )
                     )
-
             print("Shielding calculations completed.")
+        write_json("save", json_dict, jsonfile)
+        # write generic:
+        instructgeneric = {
+            "jobtype": "genericout",
+            "nat": nat,
+            "progsettings": {"omp": args.omp, "tempprogpath": ""},
+        }
+        results = run_in_parallel(
+            q, resultq, job, maxthreads, results + tmp_results, instructgeneric, "NMR"
+        )
+        # exit_log, fail_rate = check_tasks(results, args)
 
         # write .anmrrc
         print("\nwriting .anmrrc")
@@ -11010,15 +12533,16 @@ def part4(
             args.cref,
             args.fref,
             args.pref,
+            args.siref,
             args.hactive,
             args.cactive,
             args.factive,
             args.pactive,
+            args.siactive,
             args.calcJ,
             args.calcS,
+            save_errors,
         )
-        write_json("save", json_dict, jsonfile)
-
         # check if rotamers of each other are still remaining in the final ensemble
         if rotdict:
             try:
@@ -11077,12 +12601,11 @@ if __name__ == "__main__":
         nat,
         maxthreads,
         xtbpath,
-        settings,
+        environsettings,
         dbpath,
         cosmothermversion,
         cosmorssetup,
         orcapath,
-        orca_new,
         orca_old,
         crestpath,
         mpshiftpath,
@@ -11093,7 +12616,14 @@ if __name__ == "__main__":
     # RUNNING PART1
     try:
         results, json_dict = part1(
-            args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, settings
+            args,
+            jsonfile,
+            json_dict,
+            conformersxyz,
+            nat,
+            maxthreads,
+            xtbpath,
+            environsettings,
         )
     except Exception as e:
         print("ERROR in part1!")
@@ -11105,7 +12635,14 @@ if __name__ == "__main__":
     # RUNNING PART2
     try:
         results, json_dict, rotdict = part2(
-            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
+            args,
+            results,
+            jsonfile,
+            cwd,
+            json_dict,
+            maxthreads,
+            xtbpath,
+            environsettings,
         )
     except Exception as e:
         print("ERROR in part2!")
@@ -11117,7 +12654,14 @@ if __name__ == "__main__":
     # RUNNING PART3
     try:
         results, json_dict = part3(
-            args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, settings
+            args,
+            results,
+            jsonfile,
+            cwd,
+            json_dict,
+            maxthreads,
+            xtbpath,
+            environsettings,
         )
     except Exception as e:
         print("ERROR in part3!")
@@ -11136,9 +12680,11 @@ if __name__ == "__main__":
             json_dict,
             maxthreads,
             xtbpath,
-            settings,
+            environsettings,
             rotdict,
             spectrumlist,
+            escfpath,
+            mpshiftpath,
         )
     except Exception as e:
         print("ERROR in part4!")
