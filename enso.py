@@ -772,9 +772,9 @@ def read_json(nstruc, cwd, jsonfile, args):
                 # add information which might be missing in older
                 # enso.json files (<=version 1.2)
                 if "29Si_S" not in json_dict[item]:
-                    json_dict[item][ "29Si_S"] = "not_calculated"
+                    json_dict[item]["29Si_S"] = "not_calculated"
                 if "29Si_J" not in json_dict[item]:
-                    json_dict[item][ "29Si_J"] = "not_calculated"
+                    json_dict[item]["29Si_J"] = "not_calculated"
                 if "removed_by_user" not in json_dict[item]:
                     json_dict[item]["removed_by_user"] = False
                 if "gbsa_gsolv" not in json_dict[item]:
