@@ -1204,12 +1204,8 @@ def write_trj(results, outpath, optfolder):
                         i.energy, i.free_energy, i.name
                     )
                 )  ### energy
-                for j in conf_xyz:
-                    out.write(
-                        " {:3} {:19.10f} {:19.10f} {:19.10f}\n".format(
-                            j[0].upper(), float(j[1]), float(j[2]), float(j[3])
-                        )
-                    )
+                for line in conf_xyz:
+                    out.write(line+'\n')
     except (FileExistsError, ValueError):
         print("Could not write trajectory: {}.".format(last_folders(outpath, 1)))
     return
@@ -1236,7 +1232,7 @@ def coord2xyz(path):
     coordxyz = []
     for i in range(len(x)):
         coordxyz.append(
-            "{:3} {: 19.10f}  {: 19.10f}  {: 19.10f}".format(atom[i], x[i], y[i], z[i])
+            "{:3} {: 19.10f}  {: 19.10f}  {: 19.10f}".format(atom[i][0].upper()+atom[i][1:], x[i], y[i], z[i])
         )
     return coordxyz, len(coordxyz)
 
