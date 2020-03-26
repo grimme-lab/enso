@@ -1205,7 +1205,7 @@ def write_trj(results, outpath, optfolder):
                     )
                 )  ### energy
                 for line in conf_xyz:
-                    out.write(line+'\n')
+                    out.write(line + "\n")
     except (FileExistsError, ValueError):
         print("Could not write trajectory: {}.".format(last_folders(outpath, 1)))
     return
@@ -1232,7 +1232,9 @@ def coord2xyz(path):
     coordxyz = []
     for i in range(len(x)):
         coordxyz.append(
-            "{:3} {: 19.10f}  {: 19.10f}  {: 19.10f}".format(atom[i][0].upper()+atom[i][1:], x[i], y[i], z[i])
+            "{:3} {: 19.10f}  {: 19.10f}  {: 19.10f}".format(
+                atom[i][0].upper() + atom[i][1:], x[i], y[i], z[i]
+            )
         )
     return coordxyz, len(coordxyz)
 
@@ -6842,7 +6844,7 @@ def check_tasks(results, args, thresh=0.25):
 class handle_input:
     """ Read ensorc, write ensorc, write flags.dat"""
 
-    #add read_json write_json at some point, because they should be connected
+    # add read_json write_json at some point, because they should be connected
 
     known_keys = (
         "reference for 1H",
@@ -8904,11 +8906,9 @@ def correct_anmr_enso(cwd, removelist):
     ) as inp:
         data = inp.readlines()
     for name in removelist:
-        for line in data[1:]:
+        for line in list(data[1:]):
             if int(line.split()[1]) == int(name[4:]):
-                index = data.index(line)
-                newline = "0" + line.lstrip()[1:]
-        data[index] = newline
+                data[data.index(line)] = "0" + line.lstrip()[1:]
     with open(os.path.join(cwd, "anmr_enso"), "w", newline=None) as out:
         for line in data:
             out.write(line)
@@ -11875,7 +11875,7 @@ def part4(
                         for conf in tmp_results:
                             if item == conf.name:
                                 tmp_results.remove(conf)
-                                removelist.append(item.name)
+                                removelist.append(conf.name)
                                 print(
                                     "{} is removed as requested by the user!".format(
                                         item
