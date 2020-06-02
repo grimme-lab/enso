@@ -87,8 +87,7 @@ except ImportError:
 
 
 def cml(
-    descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref, siref
-):
+    descr, solvents, func, func3, funcJ, funcS, gfnv, href, cref, fref, pref, siref, choice_smgsolv2, input_object, argv=None):
     """ Get args object from commandline interface.
         Needs argparse module."""
 
@@ -105,7 +104,7 @@ def cml(
         dest="checkinput",
         action="store_true",
         required=False,
-        help="check if input is correct and stops",
+        help="Option to check if all necessary information for the ENSO calculation are provided and check if certain setting combinations make sence.",
     )
     group1.add_argument(
         "-run",
@@ -113,15 +112,25 @@ def cml(
         dest="run",
         action="store_true",
         required=False,
-        help="necessary to run the full ENSO program",
+        help="Option to read all settings from the file flags.dat and start the ENSO calculation.",
     )
     group1.add_argument(
         "-write_ensorc",
+        "--write_ensorc",
         dest="writeensorc",
         default=False,
         action="store_true",
         required=False,
         help="Write new ensorc, which is placed into the current directory.",
+    )
+    group1.add_argument(
+        "-printout",
+        "--printout",
+        dest="doprintout",
+        default=False,
+        action="store_true",
+        required=False,
+        help="Printout energies only based on the data from enso.json.",
     )
 
     group2 = parser.add_argument_group("System specific flags")
@@ -131,7 +140,7 @@ def cml(
         dest="chrg",
         action="store",
         required=False,
-        help="charge of the investigated molecule.",
+        help="Charge of the investigated molecule.",
     )
     group2.add_argument(
         "-solv",
@@ -141,7 +150,7 @@ def cml(
         metavar="",
         action="store",
         required=False,
-        help="solvent used in whole procedure, available solvents are: {}.".format(
+        help="Solvent the molecule is solvated in, available solvents are: {}.".format(
             solvents
         ),
     )
@@ -152,7 +161,7 @@ def cml(
         action="store",
         required=False,
         type=int,
-        help="integer number of unpaired electrons of the investigated molecule.",
+        help="Integer number of unpaired electrons of the investigated molecule.",
     )
     group2.add_argument(
         "-T",
@@ -167,34 +176,34 @@ def cml(
     group3.add_argument(
         "-prog",
         "--program",
-        choices=["tm", "orca"],
+        choices=input_object.value_options["prog"],
         dest="prog",
         required=False,
-        help="either 'orca' or 'tm",
+        help="QM-program used for part1 either 'orca' or 'tm'.",
     )
     group3.add_argument(
         "-prog_rrho",
         "--programrrho",
-        choices=["xtb", "prog"],
+        choices=input_object.value_options["prog_rrho"],
         dest="rrhoprog",
         required=False,
-        help="program for RRHO contribution in part 2 and 3, either 'xtb' or 'prog'.",
+        help="QM-program for RRHO contribution in part2 and 3, either 'xtb' or 'prog'.",
     )
     group3.add_argument(
         "-prog3",
         "--programpart3",
-        choices=["tm", "orca"],
+        choices=input_object.value_options["prog3"],
         dest="prog3",
         required=False,
-        help="program used for part3 either 'orca' or 'tm",
+        help="QM-program used for part3 either 'orca' or 'tm'.",
     )
     group3.add_argument(
         "-prog4",
         "--programpart4",
-        choices=["tm", "orca"],
+        choices=input_object.value_options["prog4"],
         dest="prog4",
         required=False,
-        help="program for shieldings and couplings, either 'orca' or 'tm",
+        help="QM-program used for shielding- and couplingconstant calculations, either 'orca' or 'tm'.",
     )
     group3.add_argument(
         "-gfn",
@@ -203,7 +212,7 @@ def cml(
         choices=gfnv,
         action="store",
         required=False,
-        help="GFN-xTB version for calculating the RRHO contribution.",
+        help="GFN-xTB version employed for calculating the RRHO contribution.",
     )
     group3.add_argument(
         "-ancopt",
@@ -211,9 +220,8 @@ def cml(
         choices=["on", "off"],
         dest="ancopt",
         required=False,
-        help="if switched on, xtb will be used to run the optimization in part 1 and 2",
+        help="Option to use xtb as driver for the ANCopt optimzer in part1 and 2.",
     )
-
     group4 = parser.add_argument_group("Part specific flags (sorted by part)")
     group4.add_argument(
         "-part1",
@@ -222,7 +230,7 @@ def cml(
         dest="part1",
         action="store",
         required=False,
-        help=" switch part1 on or off",
+        help="Option to turn the crude optimization (part1) 'on' or 'off'.",
     )
     group4.add_argument(
         "-thrpart1",
@@ -230,7 +238,8 @@ def cml(
         dest="thr1",
         action="store",
         required=False,
-        help="threshold for energetic sorting of part 1",
+        help=("Threshold in kcal/mol. All conformers in part1 (crude optimization)"
+        " with a relativ energy below the threshold are considered for part2."),
     )
     group4.add_argument(
         "-func",
@@ -239,19 +248,16 @@ def cml(
         choices=func,
         action="store",
         required=False,
-        help="functional for part 1 and 2",
+        help="Functional for geometry optimization (used in part1 and part2).",
     )
     group4.add_argument(
         "-sm",
         "--solventmodel",
-        choices=["cpcm", "smd", "cosmo", "dcosmors"],
+        choices=input_object.value_options["sm"],
         dest="sm",
         action="store",
         required=False,
-        help="solvent model for the single-point in part 1 and the "
-        "optimizations in part 2. For TM, COSMO and DCOSMO-RS are "
-        "available (default DCOSMO-RS) and for ORCA, CPCM and SMD "
-        "(default SMD).",
+        help="Solvent model employed during the geometry optimization in part1 and part2.",
     )
     group4.add_argument(
         "-part2",
@@ -260,7 +266,7 @@ def cml(
         dest="part2",
         action="store",
         required=False,
-        help=" switch part2 on or off",
+        help="Option to turn the full optimization (part2) 'on' or 'off'.",
     )
     group4.add_argument(
         "-thrpart2",
@@ -268,17 +274,19 @@ def cml(
         dest="thr2",
         action="store",
         required=False,
-        help="threshold for energetic sorting of part 2",
+        help=("Threshold in kcal/mol. All conformers in part2 (full optimization"
+        " + low level free energy evaluation) with a relativ free energy below "
+        "the threshold are considered for part3."),
     )
     group4.add_argument(
         "-smgsolv2",
         "--solventmodelgsolvpart2",
-        choices=["sm", "cosmors", "gbsa_gsolv"],
+        choices=choice_smgsolv2,
         dest="gsolv2",
         action="store",
         required=False,
-        help="solvent model for the Gsolv calculation in part 2. Either the solvent model of the "
-        "optimizations (sm) or COSMO-RS can be used.",
+        help="Solvent model for the Gsolv calculation in part2. Either the solvent"
+        " model of the optimizations (sm) or an additive solvation model.",
     )
     group4.add_argument(
         "-part3",
@@ -287,7 +295,7 @@ def cml(
         dest="part3",
         action="store",
         required=False,
-        help=" switch part3 on or off",
+        help="Option to turn the high level free energy evaluation (part3) 'on' or 'off'.",
     )
     group4.add_argument(
         "-func3",
@@ -296,26 +304,26 @@ def cml(
         choices=func3,
         action="store",
         required=False,
-        help="functional for part3. WARNING: With TM, only the functional PW6B95 is possible.",
+        help="Functional for the high level single point in part3.",
     )
     group4.add_argument(
-        "-basispart3",
-        "--basispart3",
+        "-basis3",
+        "--basis3",
         dest="basis3",
         action="store",
         required=False,
-        help="basis for sp in part 3",
+        help="Basis set employed together with the functional (func3) for the "
+        "high level single point in part3.",
     )
     group4.add_argument(
         "-sm3",
         "--solventmoldel3",
-        choices=["smd", "dcosmors", "cosmors", "gbsa_gsolv"],
+        choices=input_object.value_options["sm3"],
         dest="sm3",
         action="store",
         required=False,
-        help="solvent model for part 3. For ORCA, SMD is available and for TM "
-        "DCOSMO-RS. COSMO-RS can be used in combination with both "
-        "programs.",
+        help="Solvent model for part3. It can be an implicit solvation model, "
+        "applied during the high level single-point calculation or an additive solvation model.",
     )
     group4.add_argument(
         "-part4",
@@ -324,7 +332,8 @@ def cml(
         dest="part4",
         action="store",
         required=False,
-        help=" switch part4 on or off",
+        help="Option to turn the shielding and coupling constants calculations "
+        "of the refined ensemble (part4) 'on' or 'off'.",
     )
     group4.add_argument(
         "-J",
@@ -333,7 +342,7 @@ def cml(
         dest="calcJ",
         action="store",
         required=False,
-        help=" switch calculation of couplings on or off",
+        help="Option to calculate coupling constants: 'on' or 'off'.",
     )
     group4.add_argument(
         "-funcJ",
@@ -342,8 +351,7 @@ def cml(
         choices=funcJ,
         action="store",
         required=False,
-        help="functional for shielding calculation in part4. WARNING: With TM, "
-        "only the functional TPSS is possible.",
+        help="Functional employed in the calculation of coupling constants in part4.",
     )
     group4.add_argument(
         "-basisJ",
@@ -351,7 +359,7 @@ def cml(
         dest="basisJ",
         action="store",
         required=False,
-        help="basis for SSCC calculation",
+        help="Basis set employed together with funcJ for calculation of coupling constants in part4.",
     )
     group4.add_argument(
         "-S",
@@ -360,7 +368,7 @@ def cml(
         dest="calcS",
         action="store",
         required=False,
-        help=" switch calculation of shieldings on or off",
+        help="Option to calculate shielding constants: 'on' or 'off'.",
     )
     group4.add_argument(
         "-funcS",
@@ -369,7 +377,7 @@ def cml(
         choices=funcS,
         action="store",
         required=False,
-        help="functional for shielding calculation in part4.",
+        help="Functional employed in the calculation of shielding constants in part4.",
     )
     group4.add_argument(
         "-basisS",
@@ -377,19 +385,19 @@ def cml(
         dest="basisS",
         action="store",
         required=False,
-        help="basis for shielding calculation",
+        help="Basis set employed together with funcS for calculation of shielding"
+        " constants in part4.",
     )
     group4.add_argument(
         "-sm4",
         "--solventmoldel4",
-        choices=["cpcm", "smd", "cosmo"],
+        choices=input_object.value_options["sm4"],
         dest="sm4",
         action="store",
         required=False,
-        help="solvent model for part 4. With TM, only COSMO is possible, for "
-        "ORCA, CPCM (default) or SMD can be chosen here.",
+        help="Solvent model employed in the calculation of coupling and shielding"
+        " constants (part4).",
     )
-
     group5 = parser.add_argument_group("NMR specific flags")
     group5.add_argument(
         "-href",
@@ -397,7 +405,7 @@ def cml(
         choices=href,
         dest="href",
         required=False,
-        help="reference for 1H spectrum",
+        help="Reference molecule for 1H spectrum.",
     )
     group5.add_argument(
         "-cref",
@@ -405,7 +413,7 @@ def cml(
         choices=cref,
         dest="cref",
         required=False,
-        help="reference for 13C spectrum",
+        help="Reference molecule for 13C spectrum.",
     )
     group5.add_argument(
         "-fref",
@@ -413,7 +421,7 @@ def cml(
         choices=fref,
         dest="fref",
         required=False,
-        help="reference for 19F spectrum",
+        help="Reference molecule for 19F spectrum.",
     )
     group5.add_argument(
         "-pref",
@@ -421,7 +429,7 @@ def cml(
         choices=pref,
         dest="pref",
         required=False,
-        help="reference for 31P spectrum",
+        help="Reference molecule for 31P spectrum.",
     )
     group5.add_argument(
         "-siref",
@@ -429,7 +437,7 @@ def cml(
         choices=siref,
         dest="siref",
         required=False,
-        help="reference for 29Si spectrum",
+        help="Reference molecule for 29Si spectrum.",
     )
     group5.add_argument(
         "-hactive",
@@ -437,7 +445,7 @@ def cml(
         choices=["on", "off"],
         dest="hactive",
         required=False,
-        help="calculate data for 1H NMR spectrum, either on or off",
+        help="Calculate properties for all hydrogen atoms within the molecule e.g. for 1H NMR spectrum.",
     )
     group5.add_argument(
         "-cactive",
@@ -445,7 +453,7 @@ def cml(
         choices=["on", "off"],
         dest="cactive",
         required=False,
-        help="calculate data for 13C NMR spectrum, either on or off",
+        help="Calculate properties for all carbon atoms within the molecule e.g. for 13C NMR spectrum.",
     )
     group5.add_argument(
         "-factive",
@@ -453,7 +461,7 @@ def cml(
         choices=["on", "off"],
         dest="factive",
         required=False,
-        help="calculate data for 19F NMR spectrum, either on or off",
+        help="Calculate properties for all fluorine atoms within the molecule e.g. for 19F NMR spectrum.",
     )
     group5.add_argument(
         "-pactive",
@@ -461,7 +469,7 @@ def cml(
         choices=["on", "off"],
         dest="pactive",
         required=False,
-        help="calculate data for 31P NMR spectrum, either on or off",
+        help="Calculate properties for all phosphorus atoms within the molecule e.g. for 31P NMR spectrum.",
     )
     group5.add_argument(
         "-siactive",
@@ -469,7 +477,7 @@ def cml(
         choices=["on", "off"],
         dest="siactive",
         required=False,
-        help="calculate data for 29Si NMR spectrum, either on or off",
+        help="Calculate properties for all phosphorus atoms within the molecule e.g. for 29Si NMR spectrum.",
     )
     group5.add_argument(
         "-mf",
@@ -478,9 +486,8 @@ def cml(
         type=int,
         action="store",
         required=False,
-        help="experimental resonance frequency in MHz",
+        help="Setting of the experimental resonance frequency in MHz.",
     )
-
     group6 = parser.add_argument_group("Further options")
     group6.add_argument(
         "-backup",
@@ -488,7 +495,8 @@ def cml(
         dest="backup",
         action="store",
         required=False,
-        help="recalculation with conformers slightly above the threshold of part 1",
+        help="Backup-option to easily/automatically include conformers in a "
+        "second ENSO run which are only slightly above the threshold of part1.",
     )
     group6.add_argument(
         "-boltzmann",
@@ -497,7 +505,7 @@ def cml(
         choices=["on", "off"],
         action="store",
         required=False,
-        help="only boltzmann population in part 3 is calculated",
+        help="Option to only reevaluate the Boltzmann population in part3.",
     )
     group6.add_argument(
         "-check",
@@ -506,7 +514,8 @@ def cml(
         choices=["on", "off"],
         action="store",
         required=False,
-        help="cautious searching for errors and exiting if too many errors",
+        help="Option to terminate the ENSO-run if too many calculations/preparation"
+        " steps fail.",
     )
     group6.add_argument(
         "-crestcheck",
@@ -515,18 +524,18 @@ def cml(
         choices=["on", "off"],
         action="store",
         required=False,
-        help="Checking the DFT-optimized ensemble for identical structures or "
-        "rotamers and sort them, be aware that this is done using the "
-        "thresholds from CREST.",
+        help="Option to sort out conformers after DFT optimization which CREST "
+        "identifies as identical or rotamers of each other. The identification is"
+        " always performed, but the removal of conformers has to be the choice of the user.",
     )
     group6.add_argument(
         "-nc",
         "--nconf",
-        dest="nstruc",
+        dest="nconf",
         type=int,
         action="store",
         required=False,
-        help=" # numbers of structures to investigate, default is all conformers.",
+        help="Number of conformers taken from crest_conformers.xyz to be evaluated at DFT level.",
     )
 
     group7 = parser.add_argument_group("Options for parallel calculation")
@@ -536,7 +545,8 @@ def cml(
         dest="omp",
         type=int,
         action="store",
-        help="sets omp for parallel calculation",
+        help="Number of cores each thread can use. E.g. (maxthreads) 5 threads "
+        "with each (omp) 4 cores --> 20 cores need to be available on the machine.",
     )
     group7.add_argument(
         "-P",
@@ -544,7 +554,8 @@ def cml(
         dest="maxthreads",
         type=int,
         action="store",
-        help="sets maxthreads for parallel calculation",
+        help="Number of threads during the ENSO calculation. E.g. (maxthreads) 5"
+        " threads with each (omp) 4 cores --> 20 cores need to be available on the machine.",
     )
     group7.add_argument(
         "--debug",
@@ -553,7 +564,7 @@ def cml(
         default=False,
         help=argparse.SUPPRESS,
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args
 
 
@@ -621,387 +632,27 @@ def check_for_float(line):
             break
     return value
 
-
-def read_json(nstruc, cwd, jsonfile, args):
-    """Reading in jsonfile"""
-
-    conf_data = [
-        ("crude_opt", "not_calculated"),
-        ("energy_crude_opt", None),
-        ("backup_for_part2", False),
-        ("consider_for_part2", True),
-        ("opt", "not_calculated"),
-        ("energy_opt", None),
-        ("backup_for_part3", False),
-        ("sp_part2", "not_calculated"),
-        ("energy_sp_part2", None),
-        ("consider_for_part3", False),
-        ("sp_part3", "not_calculated"),
-        ("energy_sp_part3", None),
-        ("cosmo-rs", "not_calculated"),
-        ("energy_cosmo-rs", None),
-        ("gbsa_gsolv", "not_calculated"),
-        ("energy_gbsa_gsolv", None),
-        ("rrho", "not_calculated"),
-        ("energy_rrho", None),
-        ("symmetry", "C1"),
-        ("consider_for_part4", False),
-        ("1H_J", "not_calculated"),
-        ("1H_S", "not_calculated"),
-        ("13C_J", "not_calculated"),
-        ("13C_S", "not_calculated"),
-        ("19F_J", "not_calculated"),
-        ("19F_S", "not_calculated"),
-        ("29Si_J", "not_calculated"),
-        ("29Si_S", "not_calculated"),
-        ("31P_J", "not_calculated"),
-        ("31P_S", "not_calculated"),
-        ("removed_by_user", False),
-    ]
-
-    firstrun = True
-    if os.path.isfile(os.path.join(cwd, jsonfile)):
-        print("Reading file: {}".format(jsonfile))
-        firstrun = False
-        try:
-            with open(
-                os.path.join(cwd, jsonfile), "r", encoding=coding, newline=None
-            ) as inp:
-                json_dict = json.load(inp, object_pairs_hook=OrderedDict)
-        except Exception as e:
-            print("Your Jsonfile is corrupted!\n{}".format(e))
-            sys.exit(1)
-        # check if all args in flagskey are the same
-        flags_unchangable = [
-            "unpaired",
-            "chrg",
-            "solv",
-            "prog",
-            "gfnv",
-            "ancopt",
-            "func",
-            "sm",
-        ]  # must not be changed
-        flags_changable = [
-            "rrhoprog",
-            "prog4",
-            "func3",
-            "funcJ",
-            "funcS",
-            "basis3",
-            "basisJ",
-            "basisS",
-            "gsolv2",
-            "sm3",
-            "sm4",
-        ]  # might be changed
-        # all other flags of previous run are not affecting restart (e.g. OMP)
-        flags_dict = vars(args)
-        error_logical = False
-        for i in flags_changable:
-            if i not in json_dict["flags"]:
-                print("ERROR: flag {} is missing in {}!".format(i, jsonfile))
-                error_logical = True
-        for i in flags_unchangable:
-            if i not in json_dict["flags"]:
-                print("ERROR: flag {} is missing in {}!".format(i, jsonfile))
-                error_logical = True
-            elif json_dict["flags"][i] != flags_dict[i]:
-                print(
-                    "ERROR: flag {} was changed from {} to {}!".format(
-                        i, json_dict["flags"][i], flags_dict[i]
-                    )
-                )
-                error_logical = True
-        if error_logical:
-            print(
-                "One or multiple flags from the previous run were changed "
-                "or are missing!\nGoing to exit."
-            )
-            sys.exit(1)
-        if args.run:
-            # add conformers if necessary
-            for i in range(1, nstruc + 1):
-                conf = "".join("CONF" + str(i))
-                if conf not in [j for j in json_dict.keys()]:
-                    json_dict[conf] = OrderedDict(conf_data.copy())
-                    print("{} is added to the file enso.json.".format(conf))
-        # check if all keys are set
-        J_list = ["1H_J", "13C_J", "19F_J", "31P_J", "29Si_J"]
-        S_list = ["1H_S", "13C_S", "19F_S", "31P_S", "29Si_S"]
-        parts_keys = [
-            "crude_opt",
-            "opt",
-            "sp_part2",
-            "cosmo-rs",
-            "gbsa_gsolv",
-            "rrho",
-            "sp_part3",
-            "1H_J",
-            "13C_J",
-            "19F_J",
-            "31P_J",
-            "29Si_J",
-            "1H_S",
-            "13C_S",
-            "19F_S",
-            "31P_S",
-            "29Si_S",
-        ]
-        parts_values = ["calculated", "failed", "not_calculated"]
-        keys_numbers = [
-            "energy_crude_opt",
-            "energy_opt",
-            "energy_sp_part2",
-            "energy_sp_part3",
-            "energy_cosmo-rs",
-            "energy_gbsa_gsolv",
-            "energy_rrho",
-        ]
-        keys_true_false = [
-            "consider_for_part2",
-            "consider_for_part3",
-            "consider_for_part4",
-            "backup_for_part2",
-            "backup_for_part3",
-        ]
-        # removed_by_user  missing here!
-
-        for item in json_dict.keys():
-            if "CONF" in item:
-                # add information which might be missing in older
-                # enso.json files (<=version 1.2)
-                if "29Si_S" not in json_dict[item]:
-                    json_dict[item]["29Si_S"] = "not_calculated"
-                if "29Si_J" not in json_dict[item]:
-                    json_dict[item]["29Si_J"] = "not_calculated"
-                if "removed_by_user" not in json_dict[item]:
-                    json_dict[item]["removed_by_user"] = False
-                if "gbsa_gsolv" not in json_dict[item]:
-                    json_dict[item]["gbsa_gsolv"] = "not_calculated"
-                if "energy_gbsa_gsolv" not in json_dict[item]:
-                    json_dict[item]["energy_gbsa_gsolv"] = None
-                for key in parts_keys:
-                    if key not in json_dict[item]:
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are missing!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                    elif json_dict[item][key] not in parts_values:
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are not recognized!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                for key in keys_numbers:
-                    if key not in json_dict[item]:
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are missing!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                    elif json_dict[item][key] is None or isinstance(
-                        json_dict[item][key], float
-                    ):
-                        pass
-                    else:
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are not recognized!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                for key in keys_true_false:
-                    if key not in json_dict[item]:
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are missing!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                    elif json_dict[item][key] not in (True, False):
-                        print(
-                            "ERROR: information about {} for {} in the file "
-                            "{} are missing!".format(key, item, jsonfile)
-                        )
-                        error_logical = True
-                if json_dict[item]["removed_by_user"] not in (True, False):
-                    print(
-                        "ERROR: information about {} for {} in the file "
-                        "{} are not recognized!".format(
-                            "removed_by_user", item, jsonfile
-                        )
-                    )
-                    error_logical = True
-                if "symmetry" not in json_dict[item]:
-                    print(
-                        "ERROR: information about {} for {} in the file {} "
-                        "are not recognized!".format("symmetry", item, jsonfile)
-                    )
-                    error_logical = True
-        if error_logical:
-            print(
-                "One or multiple errors were found in the file {}.\nGoing to "
-                "exit.".format(jsonfile)
-            )
-            sys.exit(1)
-        # modify json_dict if a flag was changed,
-        # if gsolv2 is changed, no effect here
-        if json_dict["flags"]["temperature"] != flags_dict["temperature"]:
-            print(
-                "WARNING: The temperature has been changed with respect to the "
-                "previous run.\n       GRRHO is reset to not calculated for "
-                "all conformers."
-            )
-            for i in json_dict.keys():
-                if "CONF" in i:
-                    json_dict[i]["rrho"] = "not_calculated"
-                    json_dict[i]["energy_rrho"] = None
-        if args.part2 == "on" or args.part3 == "on":
-            if json_dict["flags"]["rrhoprog"] != flags_dict["rrhoprog"]:
-                print(
-                    "WARNING: The program for calculating GRRHO was changed "
-                    "with respect to the previous run.\n         GRRHO is reset "
-                    "to not_calculated for all conformers."
-                )
-                for i in json_dict.keys():
-                    if "CONF" in i:
-                        json_dict[i]["rrho"] = "not_calculated"
-                        json_dict[i]["energy_rrho"] = None
-        if args.part3 == "on":
-            if (
-                json_dict["flags"]["func3"] != flags_dict["func3"]
-                or json_dict["flags"]["basis3"] != flags_dict["basis3"]
-                or json_dict["flags"]["sm3"] != flags_dict["sm3"]
-            ):
-                tmpreset = False
-                if json_dict["flags"]["func3"] != flags_dict["func3"]:
-                    tmpreset = True
-                if json_dict["flags"]["basis3"] != flags_dict["basis3"]:
-                    tmpreset = True
-                if json_dict["flags"]["sm3"] in (
-                    "cosmors",
-                    "gbsa_gsolv",
-                ) and flags_dict["sm3"] in ("cosmors", "gbsa_gsolv"):
-                    # dont recalculate SP if only the solent model is
-                    # changed between additive corrections
-                    pass
-                else:
-                    # if solvent model changed to eg cosmo dcosmors smd cpcm
-                    tmpreset = True
-                if tmpreset:
-                    print(
-                        "WARNING: The density functional / the basis set and/or"
-                        " the solvent model for part 3 was changed \n"
-                        "         with respect to the previous run.\n"
-                        "         The single-point of part 3 is reset to "
-                        "not_calculated for all conformers."
-                    )
-                    for i in json_dict.keys():
-                        if "CONF" in i:
-                            json_dict[i]["sp_part3"] = "not_calculated"
-                            json_dict[i]["energy_sp_part3"] = None
-        if args.part4 == "on":
-            if (
-                json_dict["flags"]["prog4"] != flags_dict["prog4"]
-                or json_dict["flags"]["sm4"] != flags_dict["sm4"]
-            ):
-                print(
-                    "WARNING: The program and/or the solvent model for part 4 "
-                    "was changed with respect to the previous run. The "
-                    "coupling and shielding calculation are reset to "
-                    "not_calculated for all conformers."
-                )
-                for i in json_dict.keys():
-                    if "CONF" in i:
-                        for j in J_list:
-                            json_dict[i][j] = "not_calculated"
-                        for j in S_list:
-                            json_dict[i][j] = "not_calculated"
-            else:
-                if (
-                    json_dict["flags"]["funcJ"] != flags_dict["funcJ"]
-                    or json_dict["flags"]["basisJ"] != flags_dict["basisJ"]
-                ):
-                    print(
-                        "WARNING: The density functional and/or the basis set "
-                        "for the coupling calculation was changed with respect "
-                        "to the previous run.\n The coupling calculation is reset "
-                        "to not_calculated for all conformers."
-                    )
-                    for i in json_dict.keys():
-                        if "CONF" in i:
-                            for j in J_list:
-                                json_dict[i][j] = "not_calculated"
-                if (
-                    json_dict["flags"]["funcS"] != flags_dict["funcS"]
-                    or json_dict["flags"]["basisS"] != flags_dict["basisS"]
-                ):
-                    print(
-                        "WARNING: The density functional and/or the basis set "
-                        "for the shielding calculation was changed with respect "
-                        "to the previous run.\n The shielding calculation is "
-                        "reset to not_calculated for all conformers."
-                    )
-                    for i in json_dict.keys():
-                        if "CONF" in i:
-                            for j in S_list:
-                                json_dict[i][j] = "not_calculated"
-        # copy json to json#1 and so on
-        move_recursively(cwd, jsonfile)
-    else:
-        if args.run:
-            print(
-                "The file {} containing all results does not exist yet,\nand "
-                "is written during this run.\n".format(jsonfile)
-            )
-        firstrun = True
-        tmp = []
-        tmp.append(("flags", OrderedDict()))
-        for i in range(1, nstruc + 1):
-            conf = "".join("CONF" + str(i))
-            tmp.append((conf, OrderedDict(conf_data.copy())))
-        json_dict = OrderedDict(tmp)
-    json_dict["flags"] = OrderedDict(vars(args))
-    return json_dict, firstrun
-
-
-def write_json(instruction, json_dict, jsonfile):
-    """Writing jsonfile"""
-    if instruction == "save_and_exit":
-        outfile = "".join("error_" + jsonfile)
-    else:
-        outfile = jsonfile
-    print("Results are written to {}.".format(outfile))
-    with open(outfile, "w") as out:
-        json.dump(json_dict, out, indent=4, sort_keys=False)
-    if instruction == "save_and_exit":
-        print("\nGoing to exit.")
-        sys.exit(1)
-
-
-def conformersxyz2coord(conformersxyz, nat, directory, conflist, onlyenergy=False):
+def conformersxyz2coord(conformersxyz, nat, foldername, nconf, conflist, input_object, onlyenergy=False):
     """read crest_conformers.xyz and write coord into 
-    designated folders, also get GFNx-xTB energies """
+    designated folders, also get GFNn/GFNFF-xTB energies """
     with open(conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
         stringfile_lines = xyzfile.readlines()
-    if (len(conflist) * (nat + 2)) > len(stringfile_lines):
+    if (int(nconf) * (int(nat) + 2)) > len(stringfile_lines):
         print(
             "ERROR: Either the number of conformers ({}) or the number of "
-            "atoms ({}) is wrong!".format(str(len(conflist)), str(nat))
+            "atoms ({}) is wrong!".format(str(nconf), str(nat))
         )
-        write_json("save_and_exit", json_dict, jsonfile)
-    gfne = [["", None] for _ in conflist]
-    counter = 0
-    for i in conflist:
-        if "CONF" in str(i):
-            i = int("".join(filter(str.isdigit, i)))
-        gfne[counter][0] = "".join(("CONF", str(i)))
-        gfne[counter][1] = check_for_float(stringfile_lines[(i - 1) * (nat + 2) + 1])
-        if gfne[counter][1] is None:
+        input_object.write_json("save_and_exit")
+    for conf in conflist:
+        i = int(conf.name[4:])
+        conf.xtb_energy = check_for_float(stringfile_lines[(i - 1) * (nat + 2) + 1])
+        if conf.xtb_energy is None:
             print(
                 "Error in float conversion while reading file"
                 " {}!".format(conformersxyz)
-            )
+                )
+            conf.xtb_energy = None
+        input_object.json_dict[conf.name]["xtb_energy"] = conf.xtb_energy
         if not onlyenergy:
             atom = []
             x = []
@@ -1022,26 +673,19 @@ def conformersxyz2coord(conformersxyz, nat, directory, conflist, onlyenergy=Fals
                         x[j], y[j], z[j], atom[j]
                     )
                 )
-            if not os.path.isfile(os.path.join("CONF{}".format(i), directory, "coord")):
+            tmppath = os.path.join(conf.name, foldername, "coord")
+            if not os.path.isfile(tmppath):
                 print(
-                    "Write new coord file in {}".format(
-                        os.path.join("CONF{}".format(i), directory)
+                    "Write new coord file in {}".format(tmppath)
                     )
-                )
-                with open(
-                    os.path.join("CONF{}".format(i), directory, "coord"),
-                    "w",
-                    newline=None,
-                ) as coord:
+                with open(tmppath,"w", newline=None) as coord:
                     coord.write("$coord\n")
                     for line in coordxyz:
                         coord.write(line + "\n")
                     coord.write("$end")
-        counter = counter + 1
-    return gfne
+    return conflist
 
-
-def crest_routine(results, func, crestcheck, json_dict):
+def crest_routine(args, results, func, crestcheck, json_dict, crestpath, environsettings):
     """check if two conformers are rotamers of each other,
     this check is always performed, but removing conformers depends on 
     the value of crestcheck"""
@@ -1059,8 +703,8 @@ def crest_routine(results, func, crestcheck, json_dict):
     if os.path.isfile(fp):
         os.remove(fp)
 
-    ### sort conformers according to el. energy
-    results.sort(key=lambda x: float(x.energy))
+    ### sort conformers according to energy of optimization
+    results.sort(key=lambda x: float(x.energy_opt))
     ### cp coord file of lowest conformer in directory
     try:
         shutil.copy(
@@ -1082,7 +726,7 @@ def crest_routine(results, func, crestcheck, json_dict):
                 os.path.join(cwd, i.name, func)
             )  ### coordinates in xyz
             inp.write("  {}\n".format(nat))  ### number of atoms
-            inp.write("{:20.8f}        !{}\n".format(i.energy, i.name))  ### energy
+            inp.write("{:20.8f}        !{}\n".format(i.energy_opt, i.name))  ### energy
             for line in conf_xyz:
                 inp.write(line + "\n")
 
@@ -1138,10 +782,10 @@ def crest_routine(results, func, crestcheck, json_dict):
             try:
                 length = max([len(str(j)) for i in store[1:] for j in i.split()]) + 4
             except ValueError:
-                length = 4 + int(args.nstruc) + 1
+                length = 4 + int(args.nconf) + 1
             print(
                 "{:{digits}} {:10}  {:5}<--> {:{digits}} {:10}  {:5}".format(
-                    "CONFA", "E(A):", "G(A):", "CONFB", "E(B):", "G(B):", digits=length
+                    "CONFA", "E(A):", "ΔG(A):", "CONFB", "E(B):", "ΔG(B):", digits=length
                 )
             )
             for line in store[1:]:
@@ -1152,10 +796,10 @@ def crest_routine(results, func, crestcheck, json_dict):
                 print(
                     "{:{digits}} {:>10.5f} {:>5.2f} <--> {:{digits}} {:>10.5f} {:>5.2f}".format(
                         confa.name,
-                        confa.energy,
+                        confa.energy_opt,
                         confa.rel_free_energy,
                         confb.name,
-                        confb.energy,
+                        confb.energy_opt,
                         confb.rel_free_energy,
                         digits=length,
                     )
@@ -1174,7 +818,7 @@ def crest_routine(results, func, crestcheck, json_dict):
                                 json_dict[confb]["consider_for_part3"] = False
                                 results.remove(i)
 
-            if args.crestcheck and len(rotlist) > 0:
+            if args.crestcheck and rotlist:
                 for i in list(results):
                     if i.name in rotlist:
                         json_dict[i.name]["consider_for_part3"] = False
@@ -1183,14 +827,40 @@ def crest_routine(results, func, crestcheck, json_dict):
         else:
             print("ERROR: could not read CREST output (cregen.enso)!.")
             error_logical = True
-
     if error_logical:
         rotdict = {}
-
     return rotdict
 
+def get_degeneracy(cwd, results, tmp_results, input_object):
+    ''' read degeneracies determined by CREST'''
+    degenfile = os.path.join(cwd, 'cre_degen2')
+    if not os.path.isfile(degenfile):
+        print('WARNING: Degeneracies (gi) could not be determined and are set to 1.0.\n')
+        degengi = {}
+    else:
+        with open(degenfile, 'r', encoding=coding, newline=None) as inp:
+            degen = inp.readlines()
+        try:
+            degengi = {}
+            for line in degen[1:]:
+                conf = int(line.split()[0])
+                gi = float(line.split()[1])
+                degengi[conf] = gi
+        except ValueError:
+            print('WARNING: Value conversion Error from data in {}. All gi are set to 1.0.'.format(degenfile))
+    for conf in results + tmp_results:
+        if degengi:
+            if degengi.get(int(conf.name[4:]), None) is not None:
+                conf.degeneracy = degengi[int(conf.name[4:])]
+            else: 
+                print('Conformer {} not found in {} and gi is set to 1.0.'.format(conf.name, degenfile))
+                conf.degeneracy = 1.0
+        else:
+            conf.degeneracy = 1.0
+        input_object.json_dict[conf.name]["degeneracy"] = conf.degeneracy
+    return results, tmp_results, input_object
 
-def write_trj(results, outpath, optfolder):
+def write_trj(results, cwd, outpath, optfolder, nat):
     """Write trajectory to file"""
     try:
         with open(outpath, "a", encoding=coding, newline=None) as out:
@@ -1201,9 +871,26 @@ def write_trj(results, outpath, optfolder):
                 out.write("  {}\n".format(nat))  ### number of atoms
                 out.write(
                     "E= {:20.8f}  G= {:20.8f}      !{}\n".format(
-                        i.energy, i.free_energy, i.name
+                        i.sp3_energy, i.free_energy, i.name
                     )
                 )  ### energy
+                for line in conf_xyz:
+                    out.write(line + "\n")
+    except (FileExistsError, ValueError):
+        print("Could not write trajectory: {}.".format(last_folders(outpath, 1)))
+    newoutpath = outpath.split('.')[0]+'_G.xyz'
+    try:
+        with open(newoutpath, "w", encoding=coding, newline=None) as out:
+            for i in results:
+                conf_xyz, nat = coord2xyz(
+                    os.path.join(cwd, i.name, optfolder)
+                )  ### coordinates in xyz
+                out.write("  {}\n".format(nat))  ### number of atoms
+                out.write(
+                    "G= {:20.8f}  E= {:20.8f}      !{}\n".format(
+                        i.free_energy, i.sp3_energy, i.name
+                    )
+                )  ### free energy
                 for line in conf_xyz:
                     out.write(line + "\n")
     except (FileExistsError, ValueError):
@@ -1294,8 +981,7 @@ def RMSD_routine(workdir, nat):
 
     return math.sqrt(sumdiff / nat)
 
-
-def RMSD_subprocess(workdir):
+def RMSD_subprocess(workdir, environsettings):
     rmsd = None
     with open(os.path.join(workdir, "rmsd"), "w", newline=None) as outputfile:
         callargs = ["rmsd", "coord", "xtbopt.coord"]
@@ -1319,20 +1005,19 @@ def RMSD_subprocess(workdir):
                 rmsd = None
     return rmsd
 
-
 def write_anmr_enso(cwd, results):
     """write anmr_enso"""
     try:
         length = max([len(i.name[4:]) for i in results])
         if length < 4:
             length = 4
-        fmtenergy = max([len("{:.5f}".format(i.energy)) for i in results])
+        fmtenergy = max([len("{:.5f}".format(i.sp3_energy)) for i in results])
     except:
         length = 6
         fmtenergy = 7
     with open(os.path.join(cwd, "anmr_enso"), "w", newline="") as out:
         out.write(
-            "{:5} {:{digits}} {:{digits}} {:6} {:{digits2}} {:7} {:7}\n".format(
+            "{:5} {:{digits}} {:{digits}} {:6} {:{digits2}} {:7}  {:7} {:7}\n".format(
                 "ONOFF",
                 "NMR",
                 "CONF",
@@ -1340,49 +1025,45 @@ def write_anmr_enso(cwd, results):
                 "Energy",
                 "Gsolv",
                 "RRHO",
+                "gi",
                 digits=length,
                 digits2=fmtenergy,
             )
         )
         for i in results:
             out.write(
-                "{:<5} {:{digits}} {:{digits}} {:.4f} {:.5f} {:.5f} {:.5f}\n".format(
+                "{:<5} {:{digits}} {:{digits}} {:.4f} {:.5f} {:.5f} {:.5f} {:.3f}\n".format(
                     1,
                     i.name[4:],
                     i.name[4:],
                     i.new_bm_weight,
-                    i.energy,
+                    i.sp3_energy,
                     i.gsolv,
                     i.rrho,
+                    i.degeneracy,
                     digits=length,
                 )
             )
     return
 
+def correct_anmr_enso(cwd, removelist):
+    """remove conformers with failed property calculations from anmr_enso,
+    removelist contains the name of conformers to remove"""
+    with open(
+        os.path.join(cwd, "anmr_enso"), "r", encoding=coding, newline=None
+    ) as inp:
+        data = inp.readlines()
+    for name in removelist:
+        for line in list(data[1:]):
+            if int(line.split()[1]) == int(name[4:]):
+                data[data.index(line)] = "0" + line.lstrip()[1:]
+    with open(os.path.join(cwd, "anmr_enso"), "w", newline=None) as out:
+        for line in data:
+            out.write(line)
+    return
 
-def writing_anmrrc(
-    prog,
-    func,
-    sm,
-    sm4,
-    funcS,
-    basisS,
-    solv,
-    mf,
-    href,
-    cref,
-    fref,
-    pref,
-    siref,
-    hactive,
-    cactive,
-    factive,
-    pactive,
-    siactive,
-    calcJ,
-    calcS,
-    save_errors,
-):
+def writing_anmrrc(args, cwd, save_errors):
+    """ Write file .anmrrc with information processed by ANMR """
     h_tm_shieldings = {
         "TMS": {
             "pbeh-3c": {
@@ -1564,6 +1245,18 @@ def writing_anmrrc(
                     "thf": 32.24733333333333,
                     "toluene": 32.272,
                 },
+                "kt2": {
+                    "gas": 31.817999999999998,
+                    "acetone": 31.73233333333333,
+                    "chcl3": 31.746333333333336,
+                    "acetonitrile": 31.73133333333333,
+                    "ch2cl2": 31.737666666666666,
+                    "dmso": 31.73233333333333,
+                    "h2o": 31.740666666666666,
+                    "methanol": 31.73,
+                    "thf": 31.740499999999994,
+                    "toluene": 31.765666666666664,
+                },
             },
             "b97-3c": {
                 "tpss": {
@@ -1626,6 +1319,18 @@ def writing_anmrrc(
                     "thf": 32.29183333333334,
                     "toluene": 32.31616666666667,
                 },
+                 "kt2": {
+                    "gas": 31.868,
+                    "acetone": 31.778666666666663,
+                    "chcl3": 31.792500000000004,
+                    "acetonitrile": 31.778666666666663,
+                    "ch2cl2": 31.784333333333336,
+                    "dmso": 31.78033333333333,
+                    "h2o": 31.794583333333332,
+                    "methanol": 31.77633333333333,
+                    "thf": 31.787500000000005,
+                    "toluene": 31.812,
+                    },
             },
             "tpss": {
                 "tpss": {
@@ -1687,6 +1392,18 @@ def writing_anmrrc(
                     "methanol": 32.044666666666664,
                     "thf": 32.05566666666666,
                     "toluene": 32.079,
+                },
+                 "kt2": {
+                    "gas": 31.622999999999994,
+                    "acetone": 31.536666666666665,
+                    "chcl3": 31.55,
+                    "acetonitrile": 31.5365,
+                    "ch2cl2": 31.54183333333333,
+                    "dmso": 31.537666666666667,
+                    "h2o": 31.548666666666666,
+                    "methanol": 31.533833333333334,
+                    "thf": 31.544833333333333,
+                    "toluene": 31.56866666666667,
                 },
             },
         }
@@ -1868,10 +1585,22 @@ def writing_anmrrc(
                     "ch2cl2": 199.8025,
                     "dmso": 199.9715,
                     "h2o": 200.0265,
-                    "methanol": 199.93900000000002,
+                    "methanol": 199.93900,
                     "thf": 199.7775,
                     "toluene": 199.3395,
                 },
+                "kt2": {
+                    "gas": 190.719,
+                    "acetone": 191.988,
+                    "chcl3": 191.7645,
+                    "acetonitrile": 192.019,
+                    "ch2cl2": 191.8965,
+                    "dmso": 192.05150000000003,
+                    "h2o": 192.1055,
+                    "methanol": 192.02,
+                    "thf": 191.8775,
+                    "toluene": 191.4905,
+                    },
             },
             "b97-3c": {
                 "tpss": {
@@ -1934,6 +1663,18 @@ def writing_anmrrc(
                     "thf": 200.075,
                     "toluene": 199.65050000000002,
                 },
+                "kt2": {
+                    "gas": 191.037,
+                    "acetone": 192.29649999999998,
+                    "chcl3": 192.0765,
+                    "acetonitrile": 192.3275,
+                    "ch2cl2": 192.20350000000002,
+                    "dmso": 192.3755,
+                    "h2o": 192.188,
+                    "methanol": 192.33275,
+                    "thf": 192.1925,
+                    "toluene": 191.8175,
+                },
             },
             "tpss": {
                 "tpss": {
@@ -1995,6 +1736,18 @@ def writing_anmrrc(
                     "methanol": 198.755,
                     "thf": 198.587,
                     "toluene": 198.1245,
+                },
+                "kt2": {
+                    "gas": 189.386,
+                    "acetone": 190.7245,
+                    "chcl3": 190.488,
+                    "acetonitrile": 190.7585,
+                    "ch2cl2": 190.6275,
+                    "dmso": 190.7975,
+                    "h2o": 190.87900000000002,
+                    "methanol": 190.75799999999998,
+                    "thf": 190.6095,
+                    "toluene": 190.2095,
                 },
             },
         }
@@ -2180,6 +1933,18 @@ def writing_anmrrc(
                     "thf": 226.215,
                     "toluene": 225.843,
                 },
+                'kt2': {
+                    'gas': 144.178, 
+                    'acetone': 146.15, 
+                    'chcl3': 145.821, 
+                    'acetonitrile': 146.219, 
+                    'ch2cl2': 146.007, 
+                    'dmso': 146.298, 
+                    'h2o': 146.569, 
+                    'methanol': 146.185, 
+                    'thf': 146.012, 
+                    'toluene': 145.488,
+                },
             },
             "b97-3c": {
                 "tpss": {
@@ -2242,6 +2007,18 @@ def writing_anmrrc(
                     "thf": 213.14,
                     "toluene": 212.796,
                 },
+                'kt2': {
+                    'gas': 130.539, 
+                    'acetone': 130.291, 
+                    'chcl3': 130.081, 
+                    'acetonitrile': 130.364, 
+                    'ch2cl2': 130.242, 
+                    'dmso': 130.472, 
+                    'h2o': 130.803, 
+                    'methanol': 130.326, 
+                    'thf': 130.267, 
+                    'toluene': 129.808,
+                },
             },
             "tpss": {
                 "tpss": {
@@ -2303,6 +2080,18 @@ def writing_anmrrc(
                     "methanol": 209.716,
                     "thf": 209.592,
                     "toluene": 209.176,
+                },
+                'kt2': {
+                    'gas': 124.897, 
+                    'acetone': 126.154, 
+                    'chcl3': 125.806, 
+                    'acetonitrile': 126.235, 
+                    'ch2cl2': 126.001, 
+                    'dmso': 126.345, 
+                    'h2o': 126.689, 
+                    'methanol': 126.193, 
+                    'thf': 126.019, 
+                    'toluene': 125.465
                 },
             },
         }
@@ -2604,6 +2393,18 @@ def writing_anmrrc(
                     "thf": 625.933,
                     "toluene": 624.513,
                 },
+                'kt2': {
+                    'gas': 587.254, 
+                    'acetone': 587.821, 
+                    'chcl3': 587.78, 
+                    'acetonitrile': 587.962, 
+                    'ch2cl2': 587.81, 
+                    'dmso': 588.032, 
+                    'h2o': 588.129, 
+                    'methanol': 587.829, 
+                    'thf': 587.812, 
+                    'toluene': 587.606
+                    }, 
             },
             "b97-3c": {
                 "tpss": {
@@ -2666,6 +2467,18 @@ def writing_anmrrc(
                     "thf": 623.983,
                     "toluene": 622.448,
                 },
+                'kt2': {
+                    'gas': 583.324, 
+                    'acetone': 585.797, 
+                    'chcl3': 585.592, 
+                    'acetonitrile': 585.848, 
+                    'ch2cl2': 585.715, 
+                    'dmso': 585.925, 
+                    'h2o': 586.235, 
+                    'methanol': 585.813, 
+                    'thf': 585.725, 
+                    'toluene': 585.371
+                },
             },
             "tpss": {
                 "tpss": {
@@ -2727,6 +2540,18 @@ def writing_anmrrc(
                     "methanol": 623.308,
                     "thf": 622.734,
                     "toluene": 621.304,
+                },
+                'kt2': {
+                    'gas': 583.522, 
+                    'acetone': 584.278, 
+                    'chcl3': 584.168, 
+                    'acetonitrile': 584.337, 
+                    'ch2cl2': 584.241, 
+                    'dmso': 584.407, 
+                    'h2o': 584.701, 
+                    'methanol': 584.305, 
+                    'thf': 584.256, 
+                    'toluene': 584.034
                 },
             },
         },
@@ -2792,6 +2617,18 @@ def writing_anmrrc(
                     "thf": 381.391,
                     "toluene": 384.986,
                 },
+                'kt2': {
+                    'gas': 297.198, 
+                    'acetone': 281.884, 
+                    'chcl3': 282.896, 
+                    'acetonitrile': 280.816, 
+                    'ch2cl2': 281.794, 
+                    'dmso': 282.606, 
+                    'h2o': 268.382, 
+                    'methanol': 269.076, 
+                    'thf': 284.334, 
+                    'toluene': 289.473
+                },
             },
             "b97-3c": {
                 "tpss": {
@@ -2854,6 +2691,18 @@ def writing_anmrrc(
                     "thf": 376.762,
                     "toluene": 380.401,
                 },
+                'kt2': {
+                    'gas': 292.227, 
+                    'acetone': 276.414, 
+                    'chcl3': 277.413, 
+                    'acetonitrile': 275.12, 
+                    'ch2cl2': 276.191, 
+                    'dmso': 277.05, 
+                    'h2o': 262.135, 
+                    'methanol': 262.912, 
+                    'thf': 279.163, 
+                    'toluene': 284.4
+                },
             },
             "tpss": {
                 "tpss": {
@@ -2915,6 +2764,18 @@ def writing_anmrrc(
                     "methanol": 364.097,
                     "thf": 376.757,
                     "toluene": 380.319,
+                },
+                'kt2': {
+                    'gas': 292.105, 
+                    'acetone': 276.574, 
+                    'chcl3': 277.519, 
+                    'acetonitrile': 275.313, 
+                    'ch2cl2': 276.339, 
+                    'dmso': 277.197, 
+                    'h2o': 262.553, 
+                    'methanol': 263.276, 
+                    'thf': 279.247, 
+                    'toluene': 284.37,
                 },
             },
         },
@@ -3100,6 +2961,18 @@ def writing_anmrrc(
                     "thf": 425.54,
                     "toluene": 425.556,
                 },
+                "kt2": {
+                    "gas": 341.186,
+                    "acetone": 341.197,
+                    "chcl3": 341.284,
+                    "acetonitrile": 341.166,
+                    "ch2cl2": 341.208,
+                    "dmso": 341.263,
+                    "h2o": 341.201,
+                    "methanol": 341.253,
+                    "thf": 341.263,
+                    "toluene": 341.446,
+                    },
             },
             "b97-3c": {
                 "tpss": {
@@ -3161,6 +3034,18 @@ def writing_anmrrc(
                     "methanol": 426.22,
                     "thf": 426.196,
                     "toluene": 426.294,
+                },
+                "kt2": {
+                   "gas": 341.631,
+                   "acetone": 341.666,
+                   "chcl3": 341.811,
+                   "acetonitrile": 341.61,
+                   "ch2cl2": 341.676,
+                   "dmso": 341.798,
+                   "h2o": 341.602,
+                   "methanol": 341.777,
+                   "thf": 341.781,
+                   "toluene": 342.086,
                 },
             },
             "tpss": {
@@ -3224,126 +3109,132 @@ def writing_anmrrc(
                     "thf": 424.681,
                     "toluene": 424.701,
                 },
+                "kt2": {
+                    "gas": 340.026,
+                    "acetone": 340.228,
+                    "chcl3": 340.311,
+                    "acetonitrile": 340.189,
+                    "ch2cl2": 340.226,
+                    "dmso": 340.332,
+                    "h2o": 340.207,
+                    "methanol": 340.311,
+                    "thf": 340.302,
+                    "toluene": 340.453,
+                },
             },
         }
     }
-    # shieldings and solvent models
-    if solv is None:
+
+    if args.solv in (None, 'gas'):
         solv = "gas"
-    if prog == "tm":
-        # print('NMR data: func {}, funcS {}, href {}, solv {}'.format(str(func), str(funcS), str(href), str(solv)))
-        try:
-            hshielding = "{:4.3f}".format(h_tm_shieldings[href][func][funcS][solv])
-            cshielding = "{:4.3f}".format(c_tm_shieldings[cref][func][funcS][solv])
-            fshielding = "{:4.3f}".format(f_tm_shieldings[fref][func][funcS][solv])
-            pshielding = "{:4.3f}".format(p_tm_shieldings[pref][func][funcS][solv])
-            sishielding = "{:4.3f}".format(si_tm_shieldings[siref][func][funcS][solv])
-        except KeyError:
-            hshielding = 0
-            cshielding = 0
-            fshielding = 0
-            pshielding = 0
-            sishielding = 0
-            print(
-                "ERROR! The reference absolute shielding constant could not be"
-                " found!\n You have to edit the file .anmrrc by hand!"
-            )
-            save_errors.append(
-                "ERROR! The reference absolute shielding constant could not be"
-                " found!\n You have to edit the file .anmrrc by hand!"
-            )
-        if sm == "cosmo":
+    else: #optimization in solvent:
+        solv = args.solv
+        if args.prog == 'tm' and args.sm == 'cosmo':
             print(
                 "WARNING: The geometry optimization of the reference molecule "
                 "was calculated with DCOSMO-RS instead of COSMO as solvent "
                 "model (sm)!"
             )
-        if basisS != "def2-TZVP":
-            print(
-                "WARNING: The reference shielding was calculated with the "
-                "basis def2-TZVP (basisS)!"
-            )
-        sm = "DCOSMO-RS"
-        sm4 = "DCOSMO-RS"
-        basisS = "def2-TZVP"
-    elif prog == "orca":
-        try:
-            hshielding = "{:4.3f}".format(h_orca_shieldings[href][func][funcS][solv])
-            cshielding = "{:4.3f}".format(c_orca_shieldings[cref][func][funcS][solv])
-            fshielding = "{:4.3f}".format(f_orca_shieldings[fref][func][funcS][solv])
-            pshielding = "{:4.3f}".format(p_orca_shieldings[pref][func][funcS][solv])
-            sishielding = "{:4.3f}".format(si_orca_shieldings[siref][func][funcS][solv])
-        except KeyError:
-            hshielding = 0
-            cshielding = 0
-            fshielding = 0
-            pshielding = 0
-            sishielding = 0
-            print(
-                "ERROR! The reference absolute shielding constant could not be"
-                " found!\n You have to edit the file .anmrrc by hand!"
-            )
-            save_errors.append(
-                "ERROR! The reference absolute shielding constant could not be"
-                " found!\n You have to edit the file .anmrrc by hand!"
-            )
-        if sm == "cpcm":
+        elif args.prog == 'orca' and args.sm == 'cpcm':
             print(
                 "WARNING: The geometry optimization of the reference molecule "
                 "was calculated with SMD instead of CPCM as solvent model (sm)!"
             )
-        if sm4 == "cpcm":
+    if args.prog4 == "tm":
+        h_qm_shieldings = h_tm_shieldings
+        c_qm_shieldings = c_tm_shieldings
+        f_qm_shieldings = f_tm_shieldings
+        p_qm_shieldings = p_tm_shieldings
+        si_qm_shieldings = si_tm_shieldings
+        if args.sm4 == "cosmo":
+            print(
+                "WARNING: The reference shielding constant was calculated with DCOSMORS "
+                "instead of COSMO as solvent model (sm4)!"
+            )
+        lsm = "DCOSMO-RS"
+        lsm4 = "DCOSMO-RS"
+        lbasisS = "def2-TZVP"
+    elif args.prog4 == "orca":
+        lsm = "SMD"
+        lsm4 = "SMD"
+        lbasisS = "def2-TZVP"
+        h_qm_shieldings = h_orca_shieldings
+        c_qm_shieldings = c_orca_shieldings
+        f_qm_shieldings = f_orca_shieldings
+        p_qm_shieldings = p_orca_shieldings
+        si_qm_shieldings = si_orca_shieldings
+        if args.sm4 == "cpcm":
             print(
                 "WARNING: The reference shielding was calculated with SMD "
-                "instead of CPCM as solvent model (sm)!"
+                "instead of CPCM as solvent model (sm4)!"
             )
-        if basisS != "def2-TZVP":
-            print(
-                "WARNING: The reference shielding was calculated with the "
-                "basis def2-TZVP (basisS)!"
-            )
-        sm = "SMD"
-        sm4 = "SMD"
-        basisS = "def2-TZVP"
+    if args.funcS == 'pbeh-3c':
+        lbasisS = "def2-mSVP"
+        
+    if args.basisS != "def2-TZVP" and args.funcS is not 'pbeh-3c':
+        print(
+            "WARNING: The reference shielding constant was calculated with the "
+            "basis def2-TZVP (basisS)!"
+        )
+
+    # get absolute shielding constant of reference
+    prnterr = False
+    try:
+        hshielding  = "{:4.3f}".format(h_qm_shieldings[args.href][args.func][args.funcS][solv])
+    except KeyError:
+        hshielding = 0
+        prnterr = True
+    try:
+        cshielding  = "{:4.3f}".format(c_qm_shieldings[args.cref][args.func][args.funcS][solv])
+    except KeyError:
+        cshielding = 0 
+        prnterr = True
+    try:
+        fshielding  = "{:4.3f}".format(f_qm_shieldings[args.fref][args.func][args.funcS][solv])
+    except KeyError:
+        fshielding = 0
+        prnterr = True
+    try:
+        pshielding  = "{:4.3f}".format(p_qm_shieldings[args.pref][args.func][args.funcS][solv])
+    except KeyError:
+        pshielding = 0
+        prnterr = True
+    try:
+        sishielding = "{:4.3f}".format(si_qm_shieldings[args.siref][args.func][args.funcS][solv])
+    except KeyError:
+        sishielding = 0
+        prnterr = True
+    if prnterr:
+        prnterr = ("ERROR! The reference absolute shielding constant "
+                   "could not be found!\n You have to edit the file" 
+                   " .anmrrc by hand!")
+        print(prnterr)
+        save_errors.append(prnterr)
+
     # basis set for optimization
-    if func == "pbeh-3c":
+    if args.func == "pbeh-3c":
         basisfunc = "def2-mSVP"
-    elif func == "b97-3c":
+    elif args.func == "b97-3c":
         basisfunc = "def2-mTZVP"
-    elif func == "tpss":
+    elif args.func == "tpss":
         basisfunc = "def2-TZVP"
     else:
         basisfunc = "unknown"
+    # for elementactive
+    exch = {True: 1, False: 0}
+    exchonoff = {True: 'on', False: 'off'}
     # write .anmrrc
-    if args.prog4 == "tm":
-        prog = "TM"
-    elif args.prog4 == "orca":
-        prog = "ORCA"
-    ha = 0
-    ca = 0
-    fa = 0
-    pa = 0
-    sia = 0
-    if hactive == "on":
-        ha = 1
-    if cactive == "on":
-        ca = 1
-    if factive == "on":
-        fa = 1
-    if pactive == "on":
-        pa = 1
-    if siactive == "on":
-        sia = 1
     with open(os.path.join(cwd, ".anmrrc"), "w", newline=None) as arc:
         arc.write("7 8 XH acid atoms\n")
         if args.mf is not None:
             arc.write(
-                "ENSO qm= {} mf= {} lw= 1.0  J= {} S= {}\n".format(
-                    str(prog).upper(), str(mf), calcJ, calcS
+                "ENSO qm= {} mf= {} lw= 1.0  J= {} S= {} T= {:6.2f} \n".format(
+                    str(args.prog4).upper(), str(args.mf), exchonoff[args.calcJ],
+                    exchonoff[args.calcS],float(args.temperature)
                 )
             )
         else:
-            arc.write("ENSO qm= {} lw= 1.2\n".format(str(prog).upper()))
+            arc.write("ENSO qm= {} lw= 1.2\n".format(str(args.prog4).upper()))
         try:
             length = max(
                 [
@@ -3359,27 +3250,28 @@ def writing_anmrrc(
             )
         except:
             length = 6
+        # lsm4 --> localsm4 ...
         arc.write(
             "{}[{}] {}[{}]/{}//{}[{}]/{}\n".format(
-                href, solv, funcS, sm4, basisS, func, sm, basisfunc
+                args.href, solv, args.funcS, lsm4, lbasisS, args.func, lsm, basisfunc
             )
         )
         arc.write(
-            "1  {:{digits}}    0.0    {}\n".format(hshielding, ha, digits=length)
+            "1  {:{digits}}    0.0    {}\n".format(hshielding, exch[args.hactive], digits=length)
         )  # hydrogen
         arc.write(
-            "6  {:{digits}}    0.0    {}\n".format(cshielding, ca, digits=length)
+            "6  {:{digits}}    0.0    {}\n".format(cshielding, exch[args.cactive], digits=length)
         )  # carbon
         arc.write(
-            "9  {:{digits}}    0.0    {}\n".format(fshielding, fa, digits=length)
+            "9  {:{digits}}    0.0    {}\n".format(fshielding, exch[args.factive], digits=length)
         )  # fluorine
         arc.write(
-            "14 {:{digits}}    0.0    {}\n".format(sishielding, sia, digits=length)
+            "14 {:{digits}}    0.0    {}\n".format(sishielding, exch[args.siactive], digits=length)
         )  # silicon
         arc.write(
-            "15 {:{digits}}    0.0    {}\n".format(pshielding, pa, digits=length)
+            "15 {:{digits}}    0.0    {}\n".format(pshielding, exch[args.pactive], digits=length)
         )  # phosphorus
-    return
+    return save_errors
 
 
 def splitting(item):
@@ -3419,13 +3311,15 @@ def move_recursively(path, filename):
     return
 
 
-class qm_job:
+class qm_job():
+    # class attributes:
     name = ""
     xtb_energy = None
     rel_xtb_energy = None
-    energy = None
+    energy = None     # placeholder for single-point energies
+    energy_opt = None   # energy of part1 and part2 optimization
     rel_energy = None
-    sp3_energy = None
+    sp3_energy = None # energy for single-point in part3
     success = False
     workdir = ""
     func = ""
@@ -3436,17 +3330,17 @@ class qm_job:
     full = True
     cycles = 0
     rrho = None
-    gsolv = 0.0
+    gsolv = None
     free_energy = None
     rel_free_energy = None
     bm_weight = None
     new_bm_weight = None
     NMR = False
-    boltzmann = False
+    degeneracy = 1.0
+    onlyread = False
     basis = None
     gfnv = None
     unpaired = 0
-    spenergy = None
     hactive = False
     cactive = False
     pactive = False
@@ -3455,56 +3349,70 @@ class qm_job:
     symmetry = "C1"
     temperature = 298.15
     nat = 0
+    environ = None
     progsettings = {
         "tempprogpath": "",
         "xtbpath": "",
         "orca_old": "",
         "omp": 1,
         "cosmorssetup": None,
+        "cosmors_param": None,
     }
+    # class methods:
 
     def execute(self):
         pass
 
-    def _sp(self):
+    def _sp(self, silent=False):
         pass
 
     def _opt(self):
         pass
 
     def _genericoutput(self):
-        """ READ shielding and coupling constants and write them to plain output"""
+        """ READ shielding and coupling constants and write them to plain output
+        The first natom lines contain the shielding constants, and from line natom +1
+        the coupling constants are written. """
         pass
 
-    def _gbsa_rs(self, environsettings):
-        """ Calculate GBSA-RS"""
-        if not self.boltzmann:
+    def _gbsa_rs(self):
+        """ Calculate additive GBSA solvation contribution by Gsolv = Esolv - Egas,
+        using xTB and the GFNn or GFN-FF hamiltonian."""
+        if not self.onlyread:
             tmp_gas = 0
             tmp_solv = 0
-            print("Running GBSA-RS calculation in " + last_folders(self.workdir, 2))
+            exchange_name = {'gfn1': 'gfn 1', 'gfn2': 'gfn 2', 'gfnff': 'gfnff'}
+            gfnhamiltonian = exchange_name[str(self.gfnv)]
+            print("Running GBSA-Gsolv calculation in " + last_folders(self.workdir, 2))
             if os.path.isfile(os.path.join(self.workdir, "xtbrestart")):
                 os.remove(os.path.join(self.workdir, "xtbrestart"))
-            with open(
-                os.path.join(self.workdir, "gas.out"), "w", newline=None
-            ) as outputfile:
-                callargs = [
-                    self.progsettings["xtbpath"],
+            if os.path.isfile(os.path.join(self.workdir, "xtbtopo.mol")):
+                os.remove(os.path.join(self.workdir, "xtbtopo.mol"))
+            if gfnhamiltonian == 'gfnff':
+                if os.path.isfile(os.path.join(self.workdir, "gfnff_topo")):
+                    os.remove(os.path.join(self.workdir, "gfnff_topo"))
+                if os.path.isfile(os.path.join(self.workdir, "wbo")):
+                    os.remove(os.path.join(self.workdir, "wbo"))
+                if os.path.isfile(os.path.join(self.workdir, "charges")):
+                    os.remove(os.path.join(self.workdir, "charges"))
+            # run gas phase single-point:
+            with open(os.path.join(self.workdir, "gas.out"), "w", newline=None) as outputfile:
+                returncode = subprocess.call(
+                    [self.progsettings["xtbpath"],
                     "coord",
-                    "-" + str(self.gfnv),
-                    "-sp",
-                    "-chrg",
+                    "--" + gfnhamiltonian,
+                    "--sp",
+                    "--chrg",
                     str(self.chrg),
                     "--norestart",
-                ]
-                returncode = subprocess.call(
-                    callargs,
+                    ],
                     shell=False,
                     stdin=None,
                     stderr=subprocess.STDOUT,
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
             if returncode is not 0:
                 self.gsolv = None
@@ -3516,42 +3424,7 @@ class qm_job:
                     file=sys.stderr,
                 )
                 return
-            with open(
-                os.path.join(self.workdir, "solv.out"), "w", newline=None
-            ) as outputfile:
-                callargs = [
-                    self.progsettings["xtbpath"],
-                    "coord",
-                    "-" + str(self.gfnv),
-                    "-sp",
-                    "-gbsa",
-                    self.solv,
-                    "-chrg",
-                    str(self.chrg),
-                    "--norestart",
-                ]
-                returncode = subprocess.call(
-                    callargs,
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                    stdout=outputfile,
-                    env=environsettings,
-                )
-            if returncode is not 0:
-                self.gsolv = None
-                self.success = False
-                print(
-                    "ERROR: GFN-xTB error in {:18}".format(
-                        last_folders(self.workdir, 2)
-                    ),
-                    file=sys.stderr,
-                )
-                return
-            time.sleep(0.05)
-
+            # read gas phase single-point:
             if os.path.isfile(os.path.join(self.workdir, "gas.out")):
                 with open(
                     os.path.join(self.workdir, "gas.out"),
@@ -3574,12 +3447,13 @@ class qm_job:
                                     file=sys.stderr,
                                 )
                                 tmp_gas = None
+                                self.gsolv = None
                                 self.success = False
-                            break
+                                return
                         if (
                             "external code error" in line
                             or "|grad| > 500, something is totally wrong!" in line
-                            or "abnormal termination of xtb" in line
+                            or "abnormal termination" in line
                         ):
                             print(
                                 "ERROR: GFN-xTB error in {:18}".format(
@@ -3589,15 +3463,55 @@ class qm_job:
                             )
                             self.gsolv = None
                             self.success = False
-                            break
+                            return
             else:
                 print(
                     "WARNING: File {} doesn't exist!".format(
                         os.path.join(self.workdir, "gas.out")
                     )
                 )
-                self.gsolv = False
-                self.success = None
+                self.gsolv = None
+                self.success = False
+                return
+            # run single point in solvent:
+            # ``reference'' corresponds to 1\;bar of ideal gas and 1\;mol/L of liquid
+            #   solution at infinite dilution,
+            with open(
+                os.path.join(self.workdir, "solv.out"), "w", newline=None
+            ) as outputfile:
+                returncode = subprocess.call(
+                    [
+                    self.progsettings["xtbpath"],
+                    "coord",
+                    "--" + gfnhamiltonian,
+                    "--sp",
+                    "--gbsa",
+                    self.solv,
+                    "reference",
+                    "--chrg",
+                    str(self.chrg),
+                    "--norestart",
+                    ],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                    stdout=outputfile,
+                    env=self.environ,
+                )
+            if returncode is not 0:
+                self.gsolv = None
+                self.success = False
+                print(
+                    "ERROR: GFN-xTB error in {:18}".format(
+                        last_folders(self.workdir, 2)
+                    ),
+                    file=sys.stderr,
+                )
+                return
+            time.sleep(0.05)
+            # read solv.out:
             if os.path.isfile(os.path.join(self.workdir, "solv.out")):
                 with open(
                     os.path.join(self.workdir, "solv.out"),
@@ -3621,7 +3535,8 @@ class qm_job:
                                 )
                                 tmp_solv = None
                                 self.success = False
-                            break
+                                self.gsolve = None
+                                return
                         if (
                             "external code error" in line
                             or "|grad| > 500, something is totally wrong!" in line
@@ -3635,16 +3550,15 @@ class qm_job:
                             )
                             self.gsolv = None
                             self.success = False
-                            break
+                            return
             else:
                 print(
                     "WARNING: File {} doesn't exist!".format(
-                        os.path.join(self.workdir, "gas.out")
-                    )
+                        os.path.join(self.workdir, "gas.out"))
                 )
                 self.gsolv = None
                 self.success = False
-            if not self.success is False:
+            if self.success:
                 if tmp_solv is None or tmp_gas is None:
                     self.gsolv = None
                     self.success = False
@@ -3653,37 +3567,50 @@ class qm_job:
                     self.success = True
             return
 
-    def _xtbrrho(self, environsettings):
+    def _xtbrrho(self):
         """
-        RRHO contribution with GFN-XTB, available both to ORCA and TM
+        RRHO contribution with GFNn/GFN-FF-XTB, available both to ORCA and TM
         """
-        if not self.boltzmann:
-            print("Running xtb RRHO in " + last_folders(self.workdir, 2))
+        if not self.onlyread:
+            exchange_name = {'gfn1': 'gfn 1', 'gfn2': 'gfn 2', 'gfnff': 'gfnff'}
+            gfnhamiltonian = exchange_name[str(self.gfnv)]
+            print("Running {}-xTB RRHO in {}".format(str(self.gfnv).upper(), last_folders(self.workdir, 2)))
             if os.path.isfile(os.path.join(self.workdir, "xtbrestart")):
-                os.remove(os.path.join(self.workdir, "xtbrestart"))
-            elif os.path.isfile(os.path.join(self.workdir, "xcontrol-inp")):
+                os.remove(os.path.join(self.workdir, "xtbrestart")) 
+            if os.path.isfile(os.path.join(self.workdir, "xtbtopo.mol")):
+                os.remove(os.path.join(self.workdir, "xtbtopo.mol"))
+            if os.path.isfile(os.path.join(self.workdir, "xcontrol-inp")):
                 os.remove(os.path.join(self.workdir, "xcontrol-inp"))
+            if gfnhamiltonian == 'gfnff':
+                if os.path.isfile(os.path.join(self.workdir, "gfnff_topo")):
+                    os.remove(os.path.join(self.workdir, "gfnff_topo"))
+                if os.path.isfile(os.path.join(self.workdir, "wbo")):
+                    os.remove(os.path.join(self.workdir, "wbo"))
+                if os.path.isfile(os.path.join(self.workdir, "charges")):
+                    os.remove(os.path.join(self.workdir, "charges"))
             with open(
                 os.path.join(self.workdir, "xcontrol-inp"), "w", newline=None
             ) as xcout:
                 xcout.write("$thermo\n")
                 xcout.write("    temp={}\n".format(self.temperature))
+                xcout.write("$symmetry\n")
+                xcout.write("    desy=0.3\n")
                 xcout.write("$end")
             time.sleep(0.05)
             with open(
                 os.path.join(self.workdir, "ohess.out"), "w", newline=None
             ) as outputfile:
-                if self.solv:
+                if self.solv not in (None, 'gas'):
                     callargs = [
                         self.progsettings["xtbpath"],
                         "coord",
-                        "-" + str(self.gfnv),
-                        "-ohess",
-                        "-gbsa",
+                        "--" + gfnhamiltonian,
+                        "--ohess",
+                        "--gbsa",
                         self.solv,
-                        "-chrg",
+                        "--chrg",
                         str(self.chrg),
-                        "-enso",
+                        "--enso",
                         "--norestart",
                         "-I",
                         "xcontrol-inp",
@@ -3692,11 +3619,11 @@ class qm_job:
                     callargs = [
                         self.progsettings["xtbpath"],
                         "coord",
-                        "-" + str(self.gfnv),
-                        "-ohess",
+                        "--" + gfnhamiltonian,
+                        "--ohess",
                         "-chrg",
                         str(self.chrg),
-                        "-enso",
+                        "--enso",
                         "--norestart",
                         "-I",
                         "xcontrol-inp",
@@ -3709,7 +3636,7 @@ class qm_job:
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
             time.sleep(0.05)
             # check if converged:
@@ -3717,7 +3644,7 @@ class qm_job:
                 self.rrho = None
                 self.success = False
                 print(
-                    "ERROR: GFN-xTB ohess error in {:18}".format(
+                    "ERROR: {}-xTB ohess error in {:18}".format(self.gfnv,
                         last_folders(self.workdir, 2)
                     ),
                     file=sys.stderr,
@@ -3731,6 +3658,10 @@ class qm_job:
                 newline=None,
             ) as f:
                 data = json.load(f)
+            if "number of imags" in data:
+                if data["number of imags"] > 0:
+                    print("WARNING: found {} significant imaginary frequencies "
+                    "in {}".format(data["number of imags"],last_folders(self.workdir, 2)))
             if "ZPVE" not in data:
                 data["ZPVE"] = 0.0
             if "G(T)" in data:
@@ -3760,507 +3691,11 @@ class qm_job:
             self.rrho = None
             self.success = False
         return
-
-    def _TMSP(self, environsettings):
-        """Turbomole single-point calculation"""
-        if not self.boltzmann:
-            with open(
-                os.path.join(self.workdir, "ridft.out"), "w", newline=None
-            ) as outputfile:
-                subprocess.call(
-                    ["ridft"],
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                    stdout=outputfile,
-                    env=environsettings,
-                )
-        time.sleep(0.02)
-        # check if scf is converged:
-        if os.path.isfile(os.path.join(self.workdir, "ridft.out")):
-            with open(
-                os.path.join(self.workdir, "ridft.out"),
-                "r",
-                encoding=coding,
-                newline=None,
-            ) as inp:
-                stor = inp.readlines()
-                if " ENERGY CONVERGED !\n" not in stor:
-                    print(
-                        "ERROR: scf in {:18} not converged!".format(
-                            last_folders(self.workdir, 2)
-                        ),
-                        file=sys.stderr,
-                    )
-                    self.success = False
-                    self.spenergy = None
-                    return 1
-        else:
-            print(
-                "WARNING: File {} doesn't exist!".format(
-                    os.path.join(self.workdir, "ridft.out")
-                )
-            )
-            self.success = False
-            self.spenergy = None
-            return 1
-        if os.path.isfile(os.path.join(self.workdir, "energy")):
-            with open(
-                os.path.join(self.workdir, "energy"), "r", encoding=coding, newline=None
-            ) as energy:
-                storage = energy.readlines()
-            try:
-                self.spenergy = float(storage[-2].split()[1])
-                self.success = True
-            except ValueError:
-                print(
-                    "ERROR while converting energy in: {:18}".format(
-                        last_folders(self.workdir, 2)
-                    ),
-                    file=sys.stderr,
-                )
-        else:
-            self.spenergy = None
-            self.success = False
-        return
-
-    def _polyfit(self, n, m, X, Y):
-        """ translation of fortran code from cosmothermrd.f90 into python code"""
-        try:
-            n1 = n + 1
-            m1 = m + 1
-            m2 = m + 2
-            Xc = [None] * m2
-            for k in range(0, m2, 1):
-                Xc[k] = 0.0
-                for i in range(0, n1, 1):
-                    Xc[k] = Xc[k] + X[i] ** (k + 1)
-            Yc = math.fsum(Y)
-            Yx = [None] * m
-            for k in range(0, m, 1):
-                Yx[k] = 0.0
-                for i in range(0, n1, 1):
-                    Yx[k] = Yx[k] + Y[i] * X[i] ** (k + 1)
-            C = [[None] * m1 for _ in range(m1)]
-            for i in range(0, m1, 1):
-                for j in range(0, m1, 1):
-                    ij = i + j - 1
-                    if i == 0 and j == 0:
-                        C[0][0] = n1
-                    elif ij > len(Xc) - 1:
-                        C[i][j] = 0.0
-                    else:
-                        C[i][j] = Xc[ij]
-            B = [None] * m1
-            B[0] = Yc
-            for i in range(1, m1, 1):
-                B[i] = Yx[i - 1]
-            for k in range(0, m, 1):
-                for i in range(k + 1, m1, 1):
-                    B[i] = B[i] - C[i][k] / C[k][k] * B[k]
-                    for j in range(k + 1, m1, 1):
-                        C[i][j] = C[i][j] - C[i][k] / C[k][k] * C[k][j]
-            A = [None] * m1
-            A[m1 - 1] = B[m1 - 1] / C[m1 - 1][m1 - 1]
-            for i in range(m - 1, -1, -1):
-                s = 0.0
-                for k in range(i + 1, m1, 1):
-                    s = s + C[i][k] * A[k]
-                A[i] = (B[i] - s) / C[i][i]
-
-            a0 = []
-            for item in A:
-                a0.append(item)
-        except ZeroDivisionError:
-            print("Error in Gsolv!")
-            a0 = False
-        return a0
-
-    def _solv_complete(self, environsettings):
-        """complete COSMO-RS within the ENSO script"""
-        if not self.boltzmann:
-            print(
-                "Running COSMO-RS calculation in {:18}".format(
-                    last_folders(self.workdir, 2)
-                )
-            )
-            self.spenergy = None
-            # run two single-points:
-            cosmo_cefine = {
-                "normal": [
-                    "cefine",
-                    "-chrg",
-                    str(self.chrg),
-                    "-uhf",
-                    str(self.unpaired),
-                    "-func",
-                    "b-p",
-                    "-bas",
-                    "def-TZVP",
-                    "-noopt",
-                    "-grid",
-                    " m3",
-                    "-sym",
-                    "c1",
-                    "-novdw",
-                ],
-                "fine": [
-                    "cefine",
-                    "-chrg",
-                    str(self.chrg),
-                    "-uhf",
-                    str(self.unpaired),
-                    "-func",
-                    "b-p",
-                    "-bas",
-                    "def2-TZVPD",
-                    "-noopt",
-                    "-grid",
-                    " m3",
-                    "-sym",
-                    "c1",
-                    "-novdw",
-                ],
-                "19-fine": [
-                    "cefine",
-                    "-chrg",
-                    str(self.chrg),
-                    "-uhf",
-                    str(self.unpaired),
-                    "-func",
-                    "b-p",
-                    "-bas",
-                    "def2-TZVPD",
-                    "-noopt",
-                    "-grid",
-                    "m3",
-                    "-sym",
-                    "c1",
-                ],
-            }
-
-            old_workdir = self.workdir  # starting workdir
-            self.workdir = os.path.join(self.workdir, "COSMO")  # COSMO folder
-            mkdir_p(self.workdir)
-            shutil.copy(
-                os.path.join(old_workdir, "coord"), os.path.join(self.workdir, "coord")
-            )
-            # parametrization and version:
-            if "FINE" in self.progsettings["cosmorssetup"].split()[2]:
-                fine = True
-                param = "fine"
-                if self.progsettings["cosmothermversion"] == 19:
-                    param = "19-fine"
-            else:
-                fine = False
-                param = "normal"
-
-            # cefine
-            for k in range(2):
-                s = subprocess.check_output(
-                    cosmo_cefine[param],
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                )
-                time.sleep(0.15)
-                output = s.decode("utf-8").splitlines()
-                # checkoutput for errors
-                for line in output:
-                    if "define ended abnormally" in line:
-                        self.success = False
-                        return 1
-                # check if wrong functional was written by cefine
-                with open(
-                    os.path.join(self.workdir, "control"),
-                    "r",
-                    encoding=coding,
-                    newline=None,
-                ) as control:
-                    checkup = control.readlines()
-                for line in checkup:
-                    if "functional" in line:
-                        if "b-p" not in line:
-                            print(
-                                "Wrong functional in control file"
-                                " in {}".format(last_folders(self.workdir, 2))
-                            )
-                            self.success = False
-                        else:
-                            break
-            # end cefine
-            # running single-point in gas phase
-            self._TMSP(environsettings)
-            if not self.success:
-                print("Error in COSMO-RS calculation!")
-                return 1
-            with open(
-                os.path.join(self.workdir, "out.energy"), "w", newline=None
-            ) as out:
-                out.write(str(self.spenergy) + "\n")
-            self.spenergy = None
-            # running single-point in ideal conductor!
-            with open(
-                os.path.join(self.workdir, "control"),
-                "r",
-                encoding=coding,
-                newline=None,
-            ) as inp:
-                tmp = inp.readlines()
-            with open(os.path.join(self.workdir, "control"), "w", newline=None) as out:
-                for line in tmp[:-1]:
-                    out.write(line + "\n")
-                if not fine:
-                    out.write("$cosmo \n")
-                    out.write(" epsilon=infinity \n")
-                    out.write("$cosmo_out file=out.cosmo \n")
-                    out.write("$end \n")
-                else:
-                    # fine
-                    out.write("$cosmo \n")
-                    out.write(" epsilon=infinity \n")
-                    out.write(" use_contcav \n")
-                    out.write(" cavity closed \n")
-                    out.write("$cosmo_out file=out.cosmo \n")
-                    out.write("$cosmo_isorad \n")
-                    out.write("$end \n")
-            self._TMSP(environsettings)
-            if not self.success:
-                print("Error in COSMO-RS calculation during single-point calculation!")
-                return 1
-            # info from .ensorc # replacement for cosmothermrc
-            # fdir=/software/cluster/COSMOthermX16/COSMOtherm/DATABASE-COSMO/BP-TZVP-COSMO autoc
-            cosmors_solv = {
-                "acetone": "f = propanone.cosmo ",
-                "h2o": "f = h2o.cosmo ",
-                "chcl3": "f = chcl3.cosmo ",
-                "ch2cl2": "f = ch2cl2.cosmo ",
-                "acetonitrile": "f = acetonitrile_c.cosmo",
-                "dmso": "f = dimethylsulfoxide.cosmo ",
-                "methanol": "f = methanol.cosmo ",
-                "thf": "f = thf.cosmo ",
-                "toluene": "f = toluene_c0.cosmo ",
-            }
-            if fine:
-                solv_data = os.path.join(
-                    os.path.split(
-                        self.progsettings["cosmorssetup"].split()[5].strip('"')
-                    )[0],
-                    "DATABASE-COSMO/BP-TZVPD-FINE",
-                )
-            else:
-                solv_data = os.path.join(
-                    os.path.split(
-                        self.progsettings["cosmorssetup"].split()[5].strip('"')
-                    )[0],
-                    "DATABASE-COSMO/BP-TZVP-COSMO",
-                )
-            # test = ['ctd = BP_TZVP_C30_1601.ctd cdir = "/software/cluster/COSMOthermX16/COSMOtherm/CTDATA-FILES"']
-
-            henry = [
-                "henry  xh={ 1.0 0.0     }  tc=-50.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=-10.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=0.0  Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=10.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=20.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=25.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=30.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=40.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=50.0 Gsolv",
-                "henry  xh={ 1.0 0.0     }  tc=60.0 Gsolv",
-            ]
-            with open(
-                os.path.join(self.workdir, "cosmotherm.inp"), "w", newline=None
-            ) as out:
-                out.write(self.progsettings["cosmorssetup"] + "\n")
-                # write from ensorc
-                out.write("EFILE VPFILE \n")
-                if self.progsettings["cosmothermversion"] > 16:
-                    pass
-                else:  # cosmothermX16
-                    out.write("\n")  # needs empty line!
-                out.write(cosmors_solv[self.solv] + "fdir=" + solv_data + " autoc \n")
-                out.write("f = out.cosmo \n")
-                for line in henry:
-                    out.write(line + "\n")
-            # running COSMOtherm
-            with open(
-                os.path.join(self.workdir, "cosmotherm.out"), "w", newline=None
-            ) as outputfile:
-                subprocess.call(
-                    ["cosmotherm", "cosmotherm.inp"],
-                    shell=False,
-                    stdin=None,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=False,
-                    cwd=self.workdir,
-                    stdout=outputfile,
-                    env=environsettings,
-                )
-            time.sleep(0.1)
-            # get T and Gsolv for version > cosmothermX16
-            try:
-                with open(
-                    os.path.join(self.workdir, "cosmotherm.tab"),
-                    "r",
-                    encoding=coding,
-                    newline=None,
-                ) as inp:
-                    stor = inp.readlines()
-                T = []
-                gsolv = []
-                for line in stor:
-                    if "T=" in line:
-                        T.append(float(line.split()[5]))
-                    elif " out " in line:
-                        gsolv.append(float(line.split()[5]))
-            except (FileNotFoundError, ValueError):
-                print(
-                    "ERROR: cosmotherm.tab was not written, this error can be due to a missing licensefile "
-                    "information, or wrong path to the COSMO-RS Database."
-                )
-                self.gsolv = None
-                self.success = False
-                return 1
-            # cosmothermrd
-            if os.stat(os.path.join(self.workdir, "cosmotherm.tab")).st_size == 0:
-                print(
-                    "ERROR: cosmotherm.tab was not written, this error can be due to a missing licensefile "
-                    "information, or wrong path to the COSMO-RS Database."
-                )
-                self.gsolv = None
-                self.success = False
-                return 1
-            z = []
-            for i in range(len(T)):
-                z.append(float(gsolv[i]) / float(T[i]))
-            a0 = self._polyfit(len(T) - 1, 4, T, gsolv)
-            if not a0:
-                self.gsolv = None
-                self.success = False
-                return 1
-            temp = float(self.temperature)
-            gsolv_out = (
-                a0[0]
-                + a0[1] * temp
-                + a0[2] * temp ** 2
-                + a0[3] * temp ** 3
-                + a0[4] * temp ** 4
-            )
-            dh = a0[0]
-            ssolv = -(
-                a0[1]
-                + 2.0 * a0[2] * temp
-                + 3.0 * a0[3] * temp ** 2
-                + 4.0 * a0[4] * temp ** 3
-            )
-            hsolv = gsolv_out + temp * ssolv
-            a0 = self._polyfit(len(T) - 1, 4, T, z)
-            hsolv2 = (
-                -temp
-                * temp
-                * (
-                    a0[1]
-                    + 2.0 * a0[2] * temp
-                    + 3.0 * a0[3] * temp ** 2
-                    + 4.0 * a0[4] * temp ** 3
-                )
-            )
-            ssolv2 = (hsolv2 - gsolv_out) / temp
-
-            ## volumework:
-            R = 1.987203585e-03  # kcal/(mol*K)
-            videal = (
-                24.789561955 / 298.15
-            )  # molar volume for ideal gas at 298.15 K 100.0 kPa
-            volwork = R * temp * math.log(videal * temp)
-
-            self.workdir = old_workdir
-            with open(
-                os.path.join(self.workdir, "cosmors.out"), "w", newline=None
-            ) as out:
-                out.write(
-                    "This is cosmothermrd (python version in ENSO) (SG,FB,SAW, 06/18)\n"
-                )
-                out.write("final thermochemical solvation properties in kcal/mol\n")
-                out.write(
-                    "derived from {} different temperatures\n".format(str(len(T)))
-                )
-                out.write("big differences between the two values for S and H\n")
-                out.write("indicate numerical problems (change cosmotherm T range)\n")
-                out.write(
-                    "----------------------------------------------------------\n"
-                )
-                out.write(" Hsolv(0 K,extrapolated)  = {:10.3f}\n".format(dh))
-                out.write(
-                    " Ssolv({} K)= {:10.5f} {:10.5f}\n".format(temp, ssolv, ssolv2)
-                )
-                out.write(
-                    " Hsolv({} K)= {:10.3f} {:10.3f}\n".format(temp, hsolv, hsolv2)
-                )
-                out.write(" Gsolv({} K)= {:10.3f}\n".format(temp, gsolv_out))
-                out.write(" VWork({} K)= {:10.3f}\n".format(temp, volwork))
-                out.write(
-                    " Gsolv+VWork({} K)= {:10.3f}\n".format(temp, (gsolv_out + volwork))
-                )
-            time.sleep(0.05)
-            self.gsolv = gsolv_out / 627.50947428
-            self.success = True
-        else:  # read only output if boltzmann
-            if os.path.isfile(os.path.join(self.workdir, "cosmors.out")):
-                with open(
-                    os.path.join(self.workdir, "cosmors.out"),
-                    "r",
-                    encoding=coding,
-                    newline=None,
-                ) as inp:
-                    stor = inp.readlines()
-                    for line in stor:
-                        if " Gsolv(" in line:
-                            try:
-                                self.gsolv = (
-                                    float(line.split()[2]) / 627.50947428
-                                )  # with volume work from cosmothermrd
-                                self.success = True
-                            except:
-                                self.success = False
-                                self.gsolv = None
-                                print(
-                                    "\nERROR: could not get Gsolv from COSMO-RS in {:18}!".format(
-                                        last_folders(self.workdir, 2)
-                                    ),
-                                    file=sys.stderr,
-                                )
-                                return 1
-                    if math.isnan(self.gsolv):
-                        self.success = False
-                    if not self.success:
-                        self.gsolv = None
-                        print(
-                            "\nERROR: COSMO-RS in {:18} not converged!".format(
-                                last_folders(self.workdir, 2)
-                            ),
-                            file=sys.stderr,
-                        )
-            else:
-                print(
-                    "WARNING: {} doesn't exist!".format(
-                        os.path.join(self.workdir, "cosmors.out")
-                    )
-                )
-                self.success = False
-                self.gsolv = None
-                return 1
-        return
-        # END QM_JOB ######################################
+# END QM_JOB ######################################
 
 
 class tm_job(qm_job):
-    def cefine(self, environsettings):
+    def cefine(self):
         """Do cefine for func"""
         removegf = False
         if self.basis == "def2-QZVP(-gf)":
@@ -4463,6 +3898,58 @@ class tm_job(qm_job):
                 "-d3",
             ],
         }
+        cosmo_cefine = {
+                "normal": [
+                    "cefine",
+                    "-chrg",
+                    str(self.chrg),
+                    "-uhf",
+                    str(self.unpaired),
+                    "-func",
+                    "b-p",
+                    "-bas",
+                    "def-TZVP",
+                    "-noopt",
+                    "-grid",
+                    " m3",
+                    "-sym",
+                    "c1",
+                    "-novdw",
+                ],
+                "fine": [
+                    "cefine",
+                    "-chrg",
+                    str(self.chrg),
+                    "-uhf",
+                    str(self.unpaired),
+                    "-func",
+                    "b-p",
+                    "-bas",
+                    "def2-TZVPD",
+                    "-noopt",
+                    "-grid",
+                    " m3",
+                    "-sym",
+                    "c1",
+                    "-novdw",
+                ],
+                "19-fine": [
+                    "cefine",
+                    "-chrg",
+                    str(self.chrg),
+                    "-uhf",
+                    str(self.unpaired),
+                    "-func",
+                    "b-p",
+                    "-bas",
+                    "def2-TZVPD",
+                    "-noopt",
+                    "-grid",
+                    "m3",
+                    "-sym",
+                    "c1",
+                ],
+            }
         # remove -fg functions from def2-QZVP basis set
         if removegf:
             cef_calls[self.func] = cef_calls[self.func] + ["-gf"]
@@ -4471,6 +3958,15 @@ class tm_job(qm_job):
                 # use higher grid
                 s = subprocess.check_output(
                     cef_rrhocalls[self.func],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                )
+            elif self.jobtype == "solv":
+                s = subprocess.check_output(
+                    cosmo_cefine[self.progsettings["cosmors_param"]],
                     shell=False,
                     stdin=None,
                     stderr=subprocess.STDOUT,
@@ -4505,12 +4001,15 @@ class tm_job(qm_job):
                         universal_newlines=False,
                         cwd=self.workdir,
                     )
-
             time.sleep(0.15)
             output = s.decode("utf-8").splitlines()
             # checkoutput for errors
             for line in output:
                 if "define ended abnormally" in line:
+                    self.success = False
+                    return 1
+                elif "define_huge: not found" in line:
+                    print("ERROR: define_huge: not found!")
                     self.success = False
                     return 1
             # check if wrong functional was written by cefine
@@ -4527,6 +4026,9 @@ class tm_job(qm_job):
                         testfunc = "b973c"
                     else:
                         testfunc = self.func
+                    if self.jobtype == "solv": 
+                        #cosmors setup
+                        testfunc = "b-p"
                     if testfunc not in line:
                         print(
                             "Wrong functional in control file"
@@ -4635,7 +4137,7 @@ class tm_job(qm_job):
                 newcontrol.write("$disp3 -bj -abc\n")
                 newcontrol.write("$end")
         # add solvent part and NMR part to control file if necessary
-        if self.solv and self.sm not in ["gas", None]:
+        if self.solv not in (None, 'gas') and self.sm:
             with open(
                 os.path.join(self.workdir, "control"),
                 "r",
@@ -4657,17 +4159,6 @@ class tm_job(qm_job):
                 newcontrol.write("$end")
         # add NMR part if cefine for part4
         if self.NMR:
-            numactive = 0
-            if self.hactive:
-                numactive += 1
-            if self.cactive:
-                numactive += 1
-            if self.factive:
-                numactive += 1
-            if self.pactive:
-                numactive += 1
-            if self.siactive:
-                numactive += 1
             with open(
                 os.path.join(self.workdir, "control"),
                 "r",
@@ -4688,28 +4179,34 @@ class tm_job(qm_job):
                 # newcontrol.write(' sdonly\n')
                 # newcontrol.write(' psoonly\n')
                 newcontrol.write(" thr=0.1\n")
-                if numactive == 1:
-                    if self.hactive or self.pactive:
-                        newcontrol.write('$nucsel "h" "f" "p" \n')
-                        newcontrol.write('$nucsel2 "h" "f" "p" \n')
-                    elif self.cactive:
-                        newcontrol.write('$nucsel "c" "f"  \n')
-                        newcontrol.write('$nucsel2 "c" "f"  \n')
-                    elif self.factive:
-                        newcontrol.write('$nucsel "h" "c" "f" "p"\n')
-                        newcontrol.write('$nucsel2 "h" "c" "f" "p"\n')
-                else:
-                    newcontrol.write('$nucsel "h" "c" "f" "p" "si"\n')
-                    newcontrol.write('$nucsel2 "h" "c" "f" "p" "si"\n')
+                nucsel1 = '$nucsel '
+                nucsel2 = '$nucsel2 '
+                if self.hactive:
+                    nucsel1 = nucsel1 + '"h" '
+                    nucsel2 = nucsel2 + '"h" '
+                if self.cactive:
+                    nucsel1 = nucsel1 + '"c" '
+                    nucsel2 = nucsel2 + '"c" '
+                if self.factive:
+                    nucsel1 = nucsel1 + '"f" '
+                    nucsel2 = nucsel2 + '"f" '
+                if self.pactive:
+                    nucsel1 = nucsel1 + '"p" '
+                    nucsel2 = nucsel2 + '"p" '
+                if self.siactive:
+                    nucsel1 = nucsel1 + '"si" '
+                    nucsel2 = nucsel2 + '"si" '
+                newcontrol.write(nucsel1 + '\n')
+                newcontrol.write(nucsel2 + '\n')
                 newcontrol.write("$rpaconv 8\n")
                 newcontrol.write("$end")
         time.sleep(0.15)
-        return 0
 
-    def _sp(self, environsettings):
-        """Turbomole single-point calculation"""
-        if not self.boltzmann:
-            print("Running single-point in {:18}".format(last_folders(self.workdir, 2)))
+    def _sp(self, silent=False):
+        """Turbomole single-point calculation, needs previous cefine run"""
+        if not self.onlyread:
+            if not silent:
+                print("Running single-point in {:18}".format(last_folders(self.workdir, 2)))
             with open(
                 os.path.join(self.workdir, "ridft.out"), "w", newline=None
             ) as outputfile:
@@ -4721,7 +4218,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
         time.sleep(0.02)
         # check if scf is converged:
@@ -4737,12 +4234,11 @@ class tm_job(qm_job):
                     print(
                         "ERROR: scf in {:18} not converged!".format(
                             last_folders(self.workdir, 2)
-                        ),
-                        file=sys.stderr,
+                        )
                     )
                     self.success = False
                     self.energy = None
-                    return 1
+                    return
         else:
             print(
                 "WARNING: {} doesn't exist!".format(
@@ -4770,20 +4266,376 @@ class tm_job(qm_job):
         else:
             self.energy = None
             self.success = False
-        return
 
-    def _xtbopt(self, environsettings):
-        """Turbomole optimization using ANCOPT implemented in GFN-xTB"""
+
+    def _polyfit(self, n, m, X, Y):
+        """ translation of fortran code from cosmothermrd.f90 into python code
+            necessary for COSMO-RS"""
+        try:
+            n1 = n + 1
+            m1 = m + 1
+            m2 = m + 2
+            Xc = [None] * m2
+            for k in range(0, m2, 1):
+                Xc[k] = 0.0
+                for i in range(0, n1, 1):
+                    Xc[k] = Xc[k] + X[i] ** (k + 1)
+            Yc = math.fsum(Y)
+            Yx = [None] * m
+            for k in range(0, m, 1):
+                Yx[k] = 0.0
+                for i in range(0, n1, 1):
+                    Yx[k] = Yx[k] + Y[i] * X[i] ** (k + 1)
+            C = [[None] * m1 for _ in range(m1)]
+            for i in range(0, m1, 1):
+                for j in range(0, m1, 1):
+                    ij = i + j - 1
+                    if i == 0 and j == 0:
+                        C[0][0] = n1
+                    elif ij > len(Xc) - 1:
+                        C[i][j] = 0.0
+                    else:
+                        C[i][j] = Xc[ij]
+            B = [None] * m1
+            B[0] = Yc
+            for i in range(1, m1, 1):
+                B[i] = Yx[i - 1]
+            for k in range(0, m, 1):
+                for i in range(k + 1, m1, 1):
+                    B[i] = B[i] - C[i][k] / C[k][k] * B[k]
+                    for j in range(k + 1, m1, 1):
+                        C[i][j] = C[i][j] - C[i][k] / C[k][k] * C[k][j]
+            A = [None] * m1
+            A[m1 - 1] = B[m1 - 1] / C[m1 - 1][m1 - 1]
+            for i in range(m - 1, -1, -1):
+                s = 0.0
+                for k in range(i + 1, m1, 1):
+                    s = s + C[i][k] * A[k]
+                A[i] = (B[i] - s) / C[i][i]
+
+            a0 = []
+            for item in A:
+                a0.append(item)
+        except ZeroDivisionError:
+            print("Error in Gsolv!")
+            a0 = False
+        return a0
+
+    def _solv_complete(self):
+        """complete COSMO-RS within the ENSO script"""
+        if not self.onlyread:
+            print(
+                "Running COSMO-RS calculation in {:18}".format(
+                    last_folders(self.workdir, 2)
+                )
+            )
+            # create COSMO folder
+            old_workdir = self.workdir  # starting workdir
+            self.workdir = os.path.join(self.workdir, "COSMO")  # COSMO folder
+            mkdir_p(self.workdir)
+            shutil.copy(
+                os.path.join(old_workdir, "coord"), os.path.join(self.workdir, "coord")
+            )
+            # parametrization and version:
+            if "FINE" in self.progsettings["cosmorssetup"].split()[2]:
+                fine = True
+                self.progsettings["cosmors_param"] = "fine"
+                if self.progsettings["cosmothermversion"] == 19:
+                    self.progsettings["cosmors_param"] = "19-fine"
+            else:
+                fine = False
+                self.progsettings["cosmors_param"] = "normal"
+            # run two single-points:
+            # cefine in gas phase
+            tmp_solv = self.solv
+            self.solv = 'gas'
+            self.cefine()
+            #reset solv:
+            self.solv = tmp_solv
+            # running single-point in gas phase
+            self.energy = None
+            self._sp(silent=True)
+            if not self.success:
+                print("Error in COSMO-RS calculation during single-point "
+                      "calculation!")
+                return 
+            with open(
+                os.path.join(self.workdir, "out.energy"), "w", newline=None
+            ) as out:
+                out.write(str(self.energy) + "\n")
+            self.energy = None
+            # running single-point in ideal conductor!
+            with open(
+                os.path.join(self.workdir, "control"),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                tmp = inp.readlines()
+            with open(os.path.join(self.workdir, "control"), "w", newline=None) as out:
+                for line in tmp[:-1]:
+                    out.write(line + "\n")
+                if not fine:
+                    # normal
+                    out.write("$cosmo \n")
+                    out.write(" epsilon=infinity \n")
+                    out.write("$cosmo_out file=out.cosmo \n")
+                    out.write("$end \n")
+                else:
+                    # fine
+                    out.write("$cosmo \n")
+                    out.write(" epsilon=infinity \n")
+                    out.write(" use_contcav \n")
+                    out.write(" cavity closed \n")
+                    out.write("$cosmo_out file=out.cosmo \n")
+                    out.write("$cosmo_isorad \n")
+                    out.write("$end \n")
+            self._sp(silent=True)
+            if not self.success:
+                print("Error in COSMO-RS calculation during single-point "
+                      "calculation!")
+                return 1
+            # info from .ensorc # replacement for cosmothermrc
+            # fdir=/software/cluster/COSMOthermX16/COSMOtherm/DATABASE-COSMO/BP-TZVP-COSMO autoc
+            cosmors_solv = {
+                "acetone": "f = propanone.cosmo ",
+                "h2o": "f = h2o.cosmo ",
+                "chcl3": "f = chcl3.cosmo ",
+                "ch2cl2": "f = ch2cl2.cosmo ",
+                "acetonitrile": "f = acetonitrile_c.cosmo",
+                "dmso": "f = dimethylsulfoxide.cosmo ",
+                "methanol": "f = methanol.cosmo ",
+                "thf": "f = thf.cosmo ",
+                "toluene": "f = toluene_c0.cosmo ",
+            }
+            if fine:
+                solv_data = os.path.join(
+                    os.path.split(
+                        self.progsettings["cosmorssetup"].split()[5].strip('"')
+                    )[0],
+                    "DATABASE-COSMO/BP-TZVPD-FINE",
+                )
+            else:
+                solv_data = os.path.join(
+                    os.path.split(
+                        self.progsettings["cosmorssetup"].split()[5].strip('"')
+                    )[0],
+                    "DATABASE-COSMO/BP-TZVP-COSMO",
+                )
+            # test = ['ctd = BP_TZVP_C30_1601.ctd cdir = "/software/cluster/COSMOthermX16/COSMOtherm/CTDATA-FILES"']
+
+            henry = [
+                "henry  xh={ 1.0 0.0     }  tc=-50.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=-10.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=0.0  Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=10.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=20.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=25.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=30.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=40.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=50.0 Gsolv",
+                "henry  xh={ 1.0 0.0     }  tc=60.0 Gsolv",
+            ]
+            with open(
+                os.path.join(self.workdir, "cosmotherm.inp"), "w", newline=None
+            ) as out:
+                out.write(self.progsettings["cosmorssetup"] + "\n")
+                # write from ensorc
+                out.write("EFILE VPFILE \n")
+                if self.progsettings["cosmothermversion"] > 16:
+                    pass
+                else:  # cosmothermX16
+                    out.write("\n")  # needs empty line!
+                out.write(cosmors_solv[self.solv] + "fdir=" + solv_data + " autoc \n")
+                out.write("f = out.cosmo \n")
+                for line in henry:
+                    out.write(line + "\n")
+            # running COSMOtherm
+            with open(
+                os.path.join(self.workdir, "cosmotherm.out"), "w", newline=None
+            ) as outputfile:
+                subprocess.call(
+                    ["cosmotherm", "cosmotherm.inp"],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd=self.workdir,
+                    stdout=outputfile,
+                    env=self.environ,
+                )
+            time.sleep(0.1)
+            # get T and Gsolv for version > cosmothermX16
+            try:
+                with open(
+                    os.path.join(self.workdir, "cosmotherm.tab"),
+                    "r",
+                    encoding=coding,
+                    newline=None,
+                ) as inp:
+                    stor = inp.readlines()
+                T = []
+                gsolv = []
+                for line in stor:
+                    if "T=" in line:
+                        T.append(float(line.split()[5]))
+                    elif " out " in line:
+                        gsolv.append(float(line.split()[5]))
+            except (FileNotFoundError, ValueError):
+                print(
+                    "ERROR: cosmotherm.tab was not written, this error can be "
+                    "due to a missing licensefile information, or wrong path "
+                    "to the COSMO-RS Database."
+                )
+                self.gsolv = None
+                self.success = False
+                return 1
+            # cosmothermrd
+            if os.stat(os.path.join(self.workdir, "cosmotherm.tab")).st_size == 0:
+                print(
+                    "ERROR: cosmotherm.tab was not written, this error can be "
+                    "due to a missing licensefile information, or wrong path "
+                    "to the COSMO-RS Database."
+                )
+                self.gsolv = None
+                self.success = False
+                return 1
+            z = []
+            for i in range(len(T)):
+                z.append(float(gsolv[i]) / float(T[i]))
+            a0 = self._polyfit(len(T) - 1, 4, T, gsolv)
+            if not a0:
+                self.gsolv = None
+                self.success = False
+                return 1
+            temp = float(self.temperature)
+            gsolv_out = (
+                a0[0]
+                + a0[1] * temp
+                + a0[2] * temp ** 2
+                + a0[3] * temp ** 3
+                + a0[4] * temp ** 4
+            )
+            dh = a0[0]
+            ssolv = -(
+                a0[1]
+                + 2.0 * a0[2] * temp
+                + 3.0 * a0[3] * temp ** 2
+                + 4.0 * a0[4] * temp ** 3
+            )
+            hsolv = gsolv_out + temp * ssolv
+            a0 = self._polyfit(len(T) - 1, 4, T, z)
+            hsolv2 = (
+                -temp
+                * temp
+                * (
+                    a0[1]
+                    + 2.0 * a0[2] * temp
+                    + 3.0 * a0[3] * temp ** 2
+                    + 4.0 * a0[4] * temp ** 3
+                )
+            )
+            ssolv2 = (hsolv2 - gsolv_out) / temp
+
+            ## volumework:
+            R = 1.987203585e-03  # kcal/(mol*K)
+            videal = (
+                24.789561955 / 298.15
+            )  # molar volume for ideal gas at 298.15 K 100.0 kPa
+            volwork = R * temp * math.log(videal * temp)
+
+            self.workdir = old_workdir
+            with open(
+                os.path.join(self.workdir, "cosmors.out"), "w", newline=None
+            ) as out:
+                out.write(
+                    "This is cosmothermrd (python version in ENSO) (SG,FB,SAW, 06/18)\n"
+                )
+                out.write("final thermochemical solvation properties in kcal/mol\n")
+                out.write(
+                    "derived from {} different temperatures\n".format(str(len(T)))
+                )
+                out.write("big differences between the two values for S and H\n")
+                out.write("indicate numerical problems (change cosmotherm T range)\n")
+                out.write(
+                    "----------------------------------------------------------\n"
+                )
+                out.write(" Hsolv(0 K,extrapolated)  = {:10.3f}\n".format(dh))
+                out.write(
+                    " Ssolv({} K)= {:10.5f} {:10.5f}\n".format(temp, ssolv, ssolv2)
+                )
+                out.write(
+                    " Hsolv({} K)= {:10.3f} {:10.3f}\n".format(temp, hsolv, hsolv2)
+                )
+                out.write(" Gsolv({} K)= {:10.3f}\n".format(temp, gsolv_out))
+                out.write(" VWork({} K)= {:10.3f}\n".format(temp, volwork))
+                out.write(
+                    " Gsolv+VWork({} K)= {:10.3f}\n".format(temp, (gsolv_out + volwork))
+                )
+            time.sleep(0.05)
+            self.gsolv = gsolv_out / 627.50947428
+            self.success = True
+        else:  # read only output 
+            if os.path.isfile(os.path.join(self.workdir, "cosmors.out")):
+                with open(
+                    os.path.join(self.workdir, "cosmors.out"),
+                    "r",
+                    encoding=coding,
+                    newline=None,
+                ) as inp:
+                    stor = inp.readlines()
+                    for line in stor:
+                        if " Gsolv(" in line:
+                            try:
+                                self.gsolv = (
+                                    float(line.split()[2]) / 627.50947428
+                                )  # with volume work from cosmothermrd
+                                self.success = True
+                            except:
+                                self.success = False
+                                self.gsolv = None
+                                print(
+                                    "\nERROR: could not get Gsolv from COSMO-RS in {:18}!".format(
+                                        last_folders(self.workdir, 2)
+                                    ),
+                                    file=sys.stderr,
+                                )
+                                return 1
+                    if math.isnan(self.gsolv):
+                        self.success = False
+                    if not self.success:
+                        self.gsolv = None
+                        print(
+                            "\nERROR: COSMO-RS in {:18} not converged!".format(
+                                last_folders(self.workdir, 2)
+                            ),
+                            file=sys.stderr,
+                        )
+            else:
+                print(
+                    "WARNING: {} doesn't exist!".format(
+                        os.path.join(self.workdir, "cosmors.out")
+                    )
+                )
+                self.success = False
+                self.gsolv = None
+                return
+
+
+    def _xtbopt(self):
+        """Turbomole optimization using ANCOPT implemented in xTB"""
         if self.full:
             output = "opt-part2.out"
         else:
             output = "opt-part1.out"
-        if not self.boltzmann:
+        if not self.onlyread:
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if os.path.isfile(os.path.join(self.workdir, "xtbrestart")):
                 os.remove(os.path.join(self.workdir, "xtbrestart"))
+            if os.path.isfile(os.path.join(self.workdir, "xtbtopo.mol")):
+                os.remove(os.path.join(self.workdir, "xtbtopo.mol"))
             if self.full:
-                if self.sm == "dcosmors" and self.solv:
+                if self.sm == "dcosmors" and self.solv not in (None, 'gas'):
                     callargs = [
                         self.progsettings["xtbpath"],
                         "coord",
@@ -4813,7 +4665,7 @@ class tm_job(qm_job):
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
             if returncode is not 0:
                 self.energy = None
@@ -4876,7 +4728,7 @@ class tm_job(qm_job):
             self.success = False
         return
 
-    def _opt(self, environsettings):
+    def _opt(self):
         """Turbomole optimization using JOBEX, using adapted thresholds!"""
 
         # part2 = full optimization at either: normal (Econv/Eh = 5 × 10⁻⁶; Gconv/Eh·α⁻¹ = 1 × 10⁻³) or
@@ -4913,7 +4765,7 @@ class tm_job(qm_job):
             output = "jobex-part1.out"
             callargs = ["jobex", "-c", "100"]
             thresholds = crude
-        if not self.boltzmann:
+        if not self.onlyread:
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             with open(
                 os.path.join(self.workdir, "control"),
@@ -4939,11 +4791,11 @@ class tm_job(qm_job):
                     callargs,
                     shell=False,
                     stdin=None,
-                    stderr=None,
+                    stderr=subprocess.STDOUT,
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
 
             time.sleep(0.02)
@@ -4999,62 +4851,31 @@ class tm_job(qm_job):
             return 1
         return
 
-    def _rrho(self, environsettings):
-        """Turbomole RRHO correction in the gas phase"""
+    def _rrho(self):
+        """Turbomole RRHO correction in the gas phase,
+        this is only possible if the binary thermo is available."""
         thermo_dict = {
             "b97-3c": ["100", self.temperature, "1.0"],
             "tpss": ["100", self.temperature, "1.0"],
             "pbeh-3c": ["100", self.temperature, "0.95"],
         }
-        opt = False  # parameter to check whether reoptimization is required
-        if self.boltzmann:  # only for boltzmann evaluation
-            time.sleep(0.01)
-            # check if aoforce.out exists
-            if os.path.isfile(os.path.join(self.workdir, "aoforce.out")):
-                with open(
-                    os.path.join(self.workdir, "thermo.out"),
-                    "r",
-                    encoding=coding,
-                    newline=None,
-                ) as inp:
-                    stor = inp.readlines()
-                    for line in stor:
-                        if "G(T)           " in line:
-                            try:
-                                self.rrho = float(line.split()[1])  # a.u.
-                                self.success = True
-                            except:
-                                print(
-                                    "Error while converting energy in: {}".format(
-                                        last_folders(self.workdir, 2)
-                                    ),
-                                    file=sys.stderr,
-                                )
-                                self.rrho = None
-                                self.success = False
-                            break
-            else:
-                print(
-                    "ERROR: could not read aoforce.out in {}!".format(
-                        last_folders(self.workdir, 2)
-                    )
-                )
-                self.rrho = None
-                self.success = False
-                ## endif boltzmann
-        elif self.solv and not self.boltzmann:
-            self.solv = None
+        if self.solv not in (None, 'gas') and not self.onlyread:
+            prevsolv = self.solv
+            self.solv = "gas"
             opt = True
-        if not self.boltzmann:  # only gas phase frequencies implemented!
-            self.cefine(environsettings)
+        else:
+            opt = False
+        if not self.onlyread:
+            self.cefine()
             # if optimization was carried out in solution,
             # need new optimization in gas phase
             if opt:
                 self.full = True
-                self._opt(environsettings)
+                self._opt()
+                self.solv = prevsolv
             else:  # if optimization was carried out in gas phase,
                 # coord is sufficient without reoptimization
-                self._sp(environsettings)
+                self._sp()
                 # rdgrad
                 print("Running rdgrad in {}".format(last_folders(self.workdir, 2)))
                 with open(
@@ -5064,11 +4885,11 @@ class tm_job(qm_job):
                         ["rdgrad"],
                         shell=False,
                         stdin=None,
-                        stderr=None,
+                        stderr=subprocess.STDOUT,
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=environsettings,
+                        env=self.environ,
                     )
                 time.sleep(0.02)
                 with open(
@@ -5099,11 +4920,11 @@ class tm_job(qm_job):
                     ["aoforce", "-smpcpus", str(self.progsettings["omp"])],
                     shell=False,
                     stdin=None,
-                    stderr=None,
+                    stderr=subprocess.STDOUT,
                     universal_newlines=False,
                     cwd=self.workdir,
                     stdout=outputfile,
-                    env=environsettings,
+                    env=self.environ,
                 )
             time.sleep(0.05)
             # run thermo
@@ -5113,14 +4934,14 @@ class tm_job(qm_job):
                 ) as outputfile:
                     sthr, temp, scalefactor = thermo_dict[self.func]
                     subprocess.call(
-                        ["thermo", sthr, temp, scalefactor],
+                        ["thermo", str(sthr), str(temp), str(scalefactor)],
                         shell=False,
                         stdin=None,
-                        stderr=None,
+                        stderr=subprocess.STDOUT,
                         universal_newlines=False,
                         cwd=self.workdir,
                         stdout=outputfile,
-                        env=environsettings,
+                        env=self.environ,
                     )
                 with open(
                     os.path.join(self.workdir, "thermo.out"),
@@ -5148,9 +4969,43 @@ class tm_job(qm_job):
                 print("ERROR: aoforce output not found!")
                 self.rrho = None
                 self.success = False
+            return
+        time.sleep(0.01)
+        if os.path.isfile(os.path.join(self.workdir, "thermo.out")):
+            with open(
+                os.path.join(self.workdir, "thermo.out"),
+                "r",
+                encoding=coding,
+                newline=None,
+            ) as inp:
+                stor = inp.readlines()
+                for line in stor:
+                    if "G(T)           " in line:
+                        try:
+                            self.rrho = float(line.split()[1])  # a.u.
+                            self.success = True
+                        except:
+                            print(
+                                "Error while converting energy in: {}".format(
+                                    last_folders(self.workdir, 2)
+                                ),
+                                file=sys.stderr,
+                            )
+                            self.rrho = None
+                            self.success = False
+                            return
+        else:
+            print(
+                "ERROR: could not read thermo.out in {}!".format(
+                    last_folders(self.workdir, 2)
+                )
+            )
+            self.rrho = None
+            self.success = False
         return
 
-    def _nmrJ(self, environsettings):
+
+    def _nmrJ(self):
         """ TM NMR coupling calculation"""
         print(
             "Running couplings calculation in {}".format(last_folders(self.workdir, 2))
@@ -5171,7 +5026,7 @@ class tm_job(qm_job):
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                # env=environsettings,
+                env=self.environ,
             )
         time.sleep(0.02)
         # check for convergence
@@ -5191,7 +5046,7 @@ class tm_job(qm_job):
                 self.success = False
         return
 
-    def _nmrS(self, environsettings):
+    def _nmrS(self):
         """TM NMR shielding calculation"""
         print(
             "Running shielding calculation in {}".format(last_folders(self.workdir, 2))
@@ -5212,7 +5067,7 @@ class tm_job(qm_job):
                 universal_newlines=False,
                 cwd=self.workdir,
                 stdout=outputfile,
-                env=environsettings,
+                env=self.environ,
             )
             time.sleep(0.02)
             # check if shift calculation is converged:
@@ -5299,11 +5154,12 @@ class tm_job(qm_job):
             )
             self.success = False
         self.success = True
-
         with open(os.path.join(self.workdir, "nmrprop.dat"), "w", newline=None) as out:
+            s = sorted(zip(atom,sigma))
+            atom, sigma = map(list, zip(*s))
             for i in range(len(atom)):
                 out.write("{:{digits}} {}\n".format(atom[i], sigma[i], digits=4))
-            for i in range(1, self.nat - len(atom)):
+            for i in range(self.nat - len(atom)):
                 out.write("\n")
             for i in range(len(atom1)):
                 out.write(
@@ -5317,30 +5173,26 @@ class tm_job(qm_job):
     def execute(self):
         """Choose what to execute for the jobtype"""
         if self.jobtype == "prep":
-            if self.boltzmann:
-                self.success = True
-                pass
-            else:
-                self.cefine(environsettings)
-                print("{}  ".format(self.name))
+            self.cefine()
+            print("{}  ".format(self.name))
         elif self.jobtype == "sp":
-            self._sp(environsettings)
+            self._sp()
         elif self.jobtype == "xtbopt":
-            self._xtbopt(environsettings)
+            self._xtbopt()
         elif self.jobtype == "opt":
-            self._opt(environsettings)
+            self._opt()
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho(environsettings)
+            self._xtbrrho()
         elif self.jobtype == "rrhotm":
-            self._rrho(environsettings)
+            self._rrho()
         elif self.jobtype == "solv":
-            self._solv_complete(environsettings)
+            self._solv_complete()
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs(environsettings)
+            self._gbsa_rs()
         elif self.jobtype == "nmrJ":
-            self._nmrJ(environsettings)
+            self._nmrJ()
         elif self.jobtype == "nmrS":
-            self._nmrS(environsettings)
+            self._nmrS()
         elif self.jobtype == "genericout":
             self._genericoutput()
 
@@ -5382,7 +5234,176 @@ class orca_job(qm_job):
         "thf": ["!CPCM(THF)"],
         "toluene": ["!CPCM(Toluene)"],
     }
-
+    def _updateSP(self):
+        ''' update to the currently employed basis set'''
+        self.osp_calls = {
+            "b97-3c": [
+                "%MaxCore 8000",
+                "! def2-mTZVP b97-3c grid4",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pbeh-3c": [
+                "%MaxCore 8000",
+                "! def2-mSVP pbeh-3c grid3",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "tpss": [
+                "%MaxCore 8000",
+                "! def2-TZVP(-f) tpss  grid4 d3bj",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pw6b95": [
+                "%MaxCore 8000",
+                "! "
+                + str(self.basis)
+                + " pw6b95 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pbe0": [
+                "%MaxCore 8000",
+                "! "
+                + str(self.basis)
+                + " pbe0 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "dsd-blyp": [
+                "%MaxCore 8000",
+                "! def2-TZVPP def2-TZVPP/c ri-dsd-blyp frozencore grid5 rijk def2/jk d3bj",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "wb97x": [
+                "%MaxCore 8000",
+                "! "
+                + str(self.basis)
+                + " wb97x-d3 grid5 rijcosx def2/j loosescf nososcf gridx4",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+        }
+    # orca optimization with xtb as driver
+    ogo_xtb_calls = {
+            "b97-3c": [
+                "%MaxCore 8000",
+                "! def2-mTZVP b97-3c grid4",
+                "!ENGRAD",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pbeh-3c": [
+                "%MaxCore 8000",
+                "! def2-mSVP pbeh-3c grid4",
+                "!ENGRAD",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "tpss": [
+                "%MaxCore 8000",
+                "! def2-TZVP(-f) tpss grid4",
+                "!ENGRAD",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+            "pbe0": [
+                "%MaxCore 8000",
+                "! def2-TZVP(-f) pbe0 grid4",
+                "!ENGRAD",
+                "!     smallprint printgap noloewdin",
+                "%output",
+                "       print[P_BondOrder_M] 1",
+                "       print[P_Mayer] 1",
+                "       print[P_basis] 2",
+                "end",
+            ],
+        }
+    # orca optimization with orca, opt thresholds are added later on
+    ogo_orca_calls = {
+                "b97-3c": [
+                    "%MaxCore 8000",
+                    "! def2-mTZVP b97-3c Opt grid4",
+                    "!     smallprint printgap noloewdin",
+                    "%output",
+                    "       print[P_BondOrder_M] 1",
+                    "       print[P_Mayer] 1",
+                    "       print[P_basis] 2",
+                    "end",
+                ],
+                "pbeh-3c": [
+                    "%MaxCore 8000",
+                    "! def2-mSVP pbeh-3c Opt grid4",
+                    "!     smallprint printgap noloewdin",
+                    "%output",
+                    "       print[P_BondOrder_M] 1",
+                    "       print[P_Mayer] 1",
+                    "       print[P_basis] 2",
+                    "end",
+                ],
+                "tpss": [
+                    "%MaxCore 8000",
+                    "! def2-TZVP(-f) tpss Opt grid4",
+                    "!     smallprint printgap noloewdin",
+                    "%output",
+                    "       print[P_BondOrder_M] 1",
+                    "       print[P_Mayer] 1",
+                    "       print[P_basis] 2",
+                    "end",
+                ],
+                "pbe0": [
+                    "%MaxCore 8000",
+                    "! def2-TZVP(-f) pbe0 Opt grid4",
+                    "!     smallprint printgap noloewdin",
+                    "%output",
+                    "       print[P_BondOrder_M] 1",
+                    "       print[P_Mayer] 1",
+                    "       print[P_basis] 2",
+                    "end",
+                ],
+            }
     def xyz2coord(self):
         """convert file inp.xyz to TURBOMOLE coord file"""
         time.sleep(0.1)
@@ -5415,93 +5436,17 @@ class orca_job(qm_job):
                 coord.write("$end")
         return
 
-    def _sp(self):
+    def _sp(self, silent=False):
         """ORCA input generation and single-point calculation"""
-        if not self.boltzmann:
+        if not self.onlyread:
             # convert coord to xyz
             self.coord, self.nat = coord2xyz(self.workdir)
+            # update sp dictionary
+            self._updateSP()
             # input generation
-            osp_calls = {
-                "b97-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mTZVP b97-3c grid4",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbeh-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c grid3",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "tpss": [
-                    "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss  grid4 d3bj",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pw6b95": [
-                    "%MaxCore 8000",
-                    "! "
-                    + str(self.basis)
-                    + " pw6b95 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbe0": [
-                    "%MaxCore 8000",
-                    "! "
-                    + str(self.basis)
-                    + " pbe0 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "dsd-blyp": [
-                    "%MaxCore 8000",
-                    "! def2-TZVPP def2-TZVPP/c ri-dsd-blyp frozencore grid5 rijk def2/jk d3bj",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "wb97x": [
-                    "%MaxCore 8000",
-                    "! "
-                    + str(self.basis)
-                    + " wb97x-d3 grid5 rijcosx def2/j loosescf nososcf gridx4",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-            }
             with open(os.path.join(self.workdir, "inp"), "w", newline=None) as inp:
                 # functionals
-                for line in osp_calls[self.func]:
+                for line in self.osp_calls[self.func]:
                     inp.write(line + "\n")
                 # nprocs
                 if int(self.progsettings["omp"]) >= 1:
@@ -5509,14 +5454,14 @@ class orca_job(qm_job):
                     inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
-                if self.solv and self.sm == "smd":
+                if self.solv not in (None, 'gas') and self.sm == "smd":
                     if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
                     else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
-                if self.solv and self.sm == "cpcm":
+                if self.solv not in (None, 'gas') and self.sm == "cpcm":
                     for line in self.solvent_cpcm[self.solv]:
                         inp.write(line + "\n")
                 # unpaired, charge, and coordinates
@@ -5528,7 +5473,8 @@ class orca_job(qm_job):
                 inp.write("*")
             # Done writing input!
             time.sleep(0.02)
-            print("Running single-point in {}".format(last_folders(self.workdir, 2)))
+            if not silent:
+                print("Running single-point in {}".format(last_folders(self.workdir, 2)))
             # start SP calculation
             with open(
                 os.path.join(self.workdir, "sp.out"), "w", newline=None
@@ -5581,7 +5527,68 @@ class orca_job(qm_job):
             )
         return
 
-    def _xtbopt(self, environsettings):
+    def _smd_gsolv(self):
+        """ Calculate SMD_gsolv, needs ORCA
+        if optimization is not performed with ORCA, only the density 
+        functional for optimization is employed, 
+        from my understanding smd is parametrized at 298 K, therfore it should only
+        be used at this temperature."""
+        # convert coord to xyz
+        self.coord, self.nat = coord2xyz(self.workdir)
+        tmp_gas = 0
+        tmp_solv = 0
+        print("Running SMD_gsolv calculation in " + last_folders(self.workdir, 2))
+        #calculate in solvent first:
+        # smd solvent orca_new? functional for geometry opt
+        self.sm = 'smd'
+        # func = 
+        self.energy = None
+        self._sp(silent=True)
+        if self.success == False or self.energy == None:
+            self.success = False
+            self.gsolv = None
+            print("ERROR: in solution phase single-point of {:18}".format(last_folders(self.workdir, 2)
+            ))
+            return
+        else:
+            tmp_solv = self.energy 
+            self.energy = None
+            self.success = False
+        time.sleep(0.1)
+        # mv inp inp_solv sp.out sp_solv.out
+        try:
+            shutil.move(os.path.join(self.workdir, 'inp'), os.path.join(self.workdir,'inp_solv'))
+            shutil.move(os.path.join(self.workdir, 'sp.out'), os.path.join(self.workdir, 'sp_solv.out'))
+        except FileNotFoundError:
+            pass
+        # calculate gas phase 
+        # set 
+        keepsolv = self.solv
+        self.solv = 'gas'
+        self._sp(silent=True)
+        self.solv = keepsolv
+        if self.success == False or self.energy == None:
+            self.success = False
+            self.energy = None
+            self.gsolv = None
+            print("ERROR: in gas phase single-point of {:18}".format(last_folders(self.workdir, 2)
+            ))
+            return
+        else:
+            tmp_gas = self.energy
+            self.energy = None
+        if self.success:
+            if tmp_solv is None or tmp_gas is None:
+                self.gsolv = None
+                self.success = False
+                print("ERROR: in SMD_Gsolv {:18}".format(last_folders(self.workdir, 2)
+            ))
+            else:
+                self.gsolv = tmp_solv - tmp_gas
+                self.success = True
+        return
+
+    def _xtbopt(self):
         """
         ORCA input generation and geometry optimization using ANCOPT
         implemented within xtb, generates inp.xyz, inp (orca-input) 
@@ -5592,7 +5599,7 @@ class orca_job(qm_job):
             output = "opt-part2.out"
         else:
             output = "opt-part1.out"
-        if not self.boltzmann:
+        if not self.onlyread:
             # convert coord to xyz, write inp.xyz
             self.coord, self.nat = coord2xyz(self.workdir)
             with open(os.path.join(self.workdir, "inp.xyz"), "w", newline=None) as inp:
@@ -5616,55 +5623,9 @@ class orca_job(qm_job):
                 )
                 newcoord.write("$end")
             # input generation
-            ogo_calls = {
-                "b97-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mTZVP b97-3c grid4",
-                    "!ENGRAD",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbeh-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c grid4",
-                    "!ENGRAD",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "tpss": [
-                    "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss grid4",
-                    "!ENGRAD",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbe0": [
-                    "%MaxCore 8000",
-                    "! def2-TZVP(-f) pbe0 grid4",
-                    "!ENGRAD",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-            }
             with open(os.path.join(self.workdir, "inp"), "w", newline=None) as inp:
                 # functionals
-                for line in ogo_calls[self.func]:
+                for line in self.ogo_xtb_calls[self.func]:
                     inp.write(line + "\n")
                 # limitation of iterations
                 # if not self.full:
@@ -5675,14 +5636,14 @@ class orca_job(qm_job):
                     inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
-                if self.solv and self.sm == "smd":
+                if self.solv not in (None, 'gas') and self.sm == "smd":
                     if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
                     else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
-                if self.solv and self.sm == "cpcm":
+                if self.solv not in (None, 'gas') and self.sm == "cpcm":
                     for line in self.solvent_cpcm[self.solv]:
                         inp.write(line + "\n")
                 # unpaired, charge, and coordinates
@@ -5695,7 +5656,7 @@ class orca_job(qm_job):
             time.sleep(0.02)
             print("Running optimization in {:18}".format(last_folders(self.workdir, 2)))
             if self.full:
-                if self.sm == "smd" and self.solv:
+                if self.sm == "smd" and self.solv not in (None, 'gas'):
                     callargs = [
                         self.progsettings["xtbpath"],
                         "coord",
@@ -5792,53 +5753,10 @@ class orca_job(qm_job):
             output = "opt-part2.out"
         else:
             output = "opt-part1.out"
-        if not self.boltzmann:
+        if not self.onlyread:
             # convert coord to xyz
             self.coord, self.nat = coord2xyz(self.workdir)
             # input generation
-            ogo_calls = {
-                "b97-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mTZVP b97-3c Opt grid4 LOOSEOPT",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbeh-3c": [
-                    "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c Opt grid4 LOOSEOPT",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "tpss": [
-                    "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss Opt grid4 LOOSEOPT",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-                "pbe0": [
-                    "%MaxCore 8000",
-                    "! def2-TZVP(-f) pbe0 Opt grid4 LOOSEOPT",
-                    "!     smallprint printgap noloewdin",
-                    "%output",
-                    "       print[P_BondOrder_M] 1",
-                    "       print[P_Mayer] 1",
-                    "       print[P_basis] 2",
-                    "end",
-                ],
-            }
-
             thresholds = {
                 "normal": [
                     "%geom",
@@ -5868,10 +5786,9 @@ class orca_job(qm_job):
                     "end",
                 ],
             }
-
             with open(os.path.join(self.workdir, "inp"), "w", newline=None) as inp:
                 # functionals
-                for line in ogo_calls[self.func]:
+                for line in self.ogo_orca_calls[self.func]:
                     inp.write(line + "\n")
                 # set thresholds:
                 if self.full:
@@ -5889,14 +5806,14 @@ class orca_job(qm_job):
                     inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                     inp.write("end\n")
                 # add solvent correction to input if solvent is specified and using smd
-                if self.solv and self.sm == "smd":
+                if self.solv not in (None, 'gas') and self.sm == "smd":
                     if self.progsettings["orca_old"]:
                         for line in self.solvent_smd_old[self.solv]:
                             inp.write(line + "\n")
                     else:
                         for line in self.solvent_smd_new[self.solv]:
                             inp.write(line + "\n")
-                if self.solv and self.sm == "cpcm":
+                if self.solv not in (None, 'gas') and self.sm == "cpcm":
                     for line in self.solvent_cpcm[self.solv]:
                         inp.write(line + "\n")
                 # unpaired, charge, and coordinates
@@ -5967,7 +5884,7 @@ class orca_job(qm_job):
 
     def _rrho(self):
         """ ORCA RRHO calculation to free energy in gas phase"""
-        if not self.boltzmann:
+        if not self.onlyread:
             self.coord, self.nat = coord2xyz(self.workdir)
             # input generation
             ofreq_calls = {
@@ -6002,7 +5919,6 @@ class orca_job(qm_job):
                     "end",
                 ],
             }
-
             ooptfreq_calls = {
                 "b97-3c": [
                     "%MaxCore 8000",
@@ -6036,8 +5952,9 @@ class orca_job(qm_job):
                 ],
             }
             with open(os.path.join(self.workdir, "inp"), "w", newline=None) as inp:
-                # if the optimization was performed in solution, the structure has to be optimized again in the gas phase
-                if self.solv:
+                # if the optimization was performed in solution, 
+                # the structure has to be optimized again in the gas phase
+                if self.solv not in (None, 'gas'):
                     for line in ooptfreq_calls[self.func]:
                         inp.write(line + "\n")
                 else:
@@ -6119,11 +6036,9 @@ class orca_job(qm_job):
             )
         return
 
-    def _nmrJ(self):
-        """ORCA NMR coupling calculation"""
-        self.coord, self.nat = coord2xyz(self.workdir)
-        # generate input   # double hybrids not implemented
-        nmrj_calls = {
+    def _updateNMRJ(self):
+        ''' update current basis sets for nmrJ calculation'''
+        self.nmrj_calls = {
             "tpss": [
                 "%MaxCore 8000",
                 "! tpss " + str(self.basis) + " grid5 def2/j  nofinalgrid nososcf ",
@@ -6157,25 +6072,22 @@ class orca_job(qm_job):
                 "end",
             ],
         }
-
+        # double hybrids not implemented!
         # 'dsd-blyp': ['%MaxCore 8000', '! dsd-blyp def2-TZVPP grid5 rijk def2/jk def2-TZVPP/C nofinalgrid nososcf',
         #              '!     smallprint printgap noloewdin', '%output', '       print[P_BondOrder_M] 1',
         #              '       print[P_Mayer] 1', '       print[P_basis] 2', 'end', '%mp2', '    RI true',
         #              '    density relaxed', 'end']
-        numactive = 0
-        if self.hactive:
-            numactive += 1
-        if self.cactive:
-            numactive += 1
-        if self.factive:
-            numactive += 1
-        if self.pactive:
-            numactive += 1
-        if self.siactive:
-            numactive += 1
+
+
+    def _nmrJ(self):
+        """ORCA NMR coupling calculation"""
+        self.coord, self.nat = coord2xyz(self.workdir)
+        # update for basisset
+        self._updateNMRJ()
+        # generate input   # double hybrids not implemented
         with open(os.path.join(self.workdir, "inpJ"), "w", newline=None) as inp:
             # functional
-            for line in nmrj_calls[self.func]:
+            for line in self.nmrj_calls[self.func]:
                 inp.write(line + "\n")
             # additional basis functions
             if self.basis == "pcJ-0":
@@ -6207,14 +6119,14 @@ class orca_job(qm_job):
                 inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
-            if self.solv and self.sm == "smd":
+            if self.solv not in (None, 'gas') and self.sm == "smd":
                 if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
                 else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
-            if self.solv and self.sm == "cpcm":
+            if self.solv not in (None, 'gas') and self.sm == "cpcm":
                 for line in self.solvent_cpcm[self.solv]:
                     inp.write(line + "\n")
             # unpaired,charge, and coordinates
@@ -6224,38 +6136,16 @@ class orca_job(qm_job):
             inp.write("*\n")
             # couplings
             inp.write("%eprnmr\n")
-            if numactive == 1:
-                if self.hactive or self.pactive:
-                    inp.write(" Nuclei = all H { ssfc }\n")
-                    inp.write(" Nuclei = all F { ssfc }\n")
-                    inp.write(" Nuclei = all P { ssfc }\n")
-                elif self.cactive:
-                    inp.write(" Nuclei = all C { ssfc }\n")
-                    inp.write(" Nuclei = all F { ssfc }\n")
-                elif self.factive:
-                    inp.write(" Nuclei = all H { ssfc }\n")
-                    inp.write(" Nuclei = all C { ssfc }\n")
-                    inp.write(" Nuclei = all F { ssfc }\n")
-                    inp.write(" Nuclei = all P { ssfc }\n")
-            else:
+            if self.hactive:
                 inp.write(" Nuclei = all H { ssfc }\n")
-                inp.write(" Nuclei = all C { ssfc }\n")
+            if self.factive:
                 inp.write(" Nuclei = all F { ssfc }\n")
+            if self.pactive:
                 inp.write(" Nuclei = all P { ssfc }\n")
+            if self.cactive:
+                inp.write(" Nuclei = all C { ssfc }\n")
+            if self.siactive:
                 inp.write(" Nuclei = all Si { ssfc }\n")
-            # if self.hactive or self.factive:
-            #    if self.cactive or self.pactive or self.factive:
-            #        inp.write(' Nuclei = all H { ssfc }\n')
-            #        inp.write(' Nuclei = all C { ssfc }\n')
-            #        inp.write(' Nuclei = all F { ssfc }\n')
-            #        inp.write(' Nuclei = all P { ssfc }\n')
-            #    else:
-            #        inp.write(' Nuclei = all H { ssfc }\n')
-            #        inp.write(' Nuclei = all F { ssfc }\n')
-            # else:
-            #    inp.write(' Nuclei = all C { ssfc }\n')
-            #    inp.write(' Nuclei = all F { ssfc }\n')
-            #    inp.write(' Nuclei = all P { ssfc }\n')
             inp.write(" SpinSpinRThresh 8.0\n")
             inp.write("end\n")
         # Done input!
@@ -6295,10 +6185,9 @@ class orca_job(qm_job):
             )
         return
 
-    def _nmrS(self):
-        """ORCA NMR shielding calculation"""
-        self.coord, self.nat = coord2xyz(self.workdir)
-        nmrs_calls = {
+    def _updateNMRS(self):
+        ''' update current basis sets for nmrJ calculation'''
+        self. nmrs_calls = {
             "tpss": [
                 "%MaxCore 8000",
                 "! tpss " + str(self.basis) + " grid5 def2/j nofinalgrid nososcf",
@@ -6308,6 +6197,20 @@ class orca_job(qm_job):
                 "       print[P_Mayer] 1",
                 "       print[P_basis] 2",
                 "end",
+            ],
+            "kt2": [
+            "%MaxCore 8000",
+            "!" + str(self.basis) + " grid5 def2/j nofinalgrid nososcf",
+            "!     smallprint printgap noloewdin",
+            "%output",
+            "       print[P_BondOrder_M] 1",
+            "       print[P_Mayer] 1",
+            "       print[P_basis] 2",
+            "end",
+            "%method",
+            "  method dft",
+            "  functional gga_xc_kt2",                                       
+            "end",
             ],
             "pbe0": [
                 "%MaxCore 8000",
@@ -6359,10 +6262,15 @@ class orca_job(qm_job):
             ],
         }
 
+    def _nmrS(self):
+        """ORCA NMR shielding calculation"""
+        self.coord, self.nat = coord2xyz(self.workdir)
+        # update for current basis sets
+        self._updateNMRS()
         with open(os.path.join(self.workdir, "inpS"), "w", newline=None) as inp:
             # functional
             try:
-                for line in nmrs_calls[self.func]:
+                for line in self.nmrs_calls[self.func]:
                     inp.write(line + "\n")
             except KeyError:
                 print("Error: Functional was not found!")
@@ -6374,14 +6282,14 @@ class orca_job(qm_job):
                 inp.write("    nprocs {}\n".format(self.progsettings["omp"]))
                 inp.write("end\n")
             # add solvent correction to input if solvent is specified and using smd
-            if self.solv and self.sm == "smd":
+            if self.solv not in (None, 'gas') and self.sm == "smd":
                 if self.progsettings["orca_old"]:
                     for line in self.solvent_smd_old[self.solv]:
                         inp.write(line + "\n")
                 else:
                     for line in self.solvent_smd_new[self.solv]:
                         inp.write(line + "\n")
-            if self.solv and self.sm == "cpcm":
+            if self.solv not in (None, 'gas') and self.sm == "cpcm":
                 for line in self.solvent_cpcm[self.solv]:
                     inp.write(line + "\n")
             # unpaired, charge, and coordinates
@@ -6511,11 +6419,12 @@ class orca_job(qm_job):
             )
             self.success = False
         self.success = True
-
         with open(os.path.join(self.workdir, "nmrprop.dat"), "w", newline=None) as out:
+            s = sorted(zip(atom,sigma))
+            atom, sigma = map(list, zip(*s))
             for i in range(len(atom)):
                 out.write("{:{digits}} {}\n".format(atom[i], sigma[i], digits=4))
-            for i in range(1, self.nat - len(atom)):
+            for i in range(self.nat - len(atom)):
                 out.write("\n")
             for i in range(len(atom1)):
                 out.write(
@@ -6536,15 +6445,15 @@ class orca_job(qm_job):
         elif self.jobtype == "opt":
             self._opt()
         elif self.jobtype == "xtbopt":
-            self._xtbopt(environsettings)
+            self._xtbopt()
         elif self.jobtype == "rrhoxtb":
-            self._xtbrrho(environsettings)
+            self._xtbrrho()
         elif self.jobtype == "rrhoorca":
             self._rrho()
-        elif self.jobtype == "solv":
-            self._solv_complete(environsettings)
         elif self.jobtype == "gbsa_gsolv":
-            self._gbsa_rs(environsettings)
+            self._gbsa_rs()
+        elif self.jobtype == "smd_gsolv":
+            self._smd_gsolv()
         elif self.jobtype == "nmrJ":
             self._nmrJ()
         elif self.jobtype == "nmrS":
@@ -6619,44 +6528,46 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
             tmp_len.append(last_folders(task.workdir, 2))
             q.put(task)
     njobs = q.qsize()
-    if instructdict.get("boltzmann", False):
+    if instructdict.get("onlyread", False):
         print(
             "\nReading data from {} conformers calculated in previous run.".format(
                 njobs
             )
         )
     else:
-        if instructdict["jobtype"] is "prep":
+        if instructdict["jobtype"] == "prep":
             print("\nPreparing {} calculations.".format(njobs))
         elif instructdict["jobtype"] in ("xtbopt", "opt"):
             if instructdict["full"]:
                 print("\nStarting {} optimizations.".format(njobs))
             else:
                 print("\nStarting {} crude optimization calculations.".format(njobs))
-        elif instructdict["jobtype"] is "sp":
+        elif instructdict["jobtype"] == "sp":
             print("\nStarting {} single-point calculations.".format(njobs))
-        elif instructdict["jobtype"] is "solv":
+        elif instructdict["jobtype"] == "solv":
             print("\nStarting {} Gsolv calculations.".format(njobs))
         elif instructdict["jobtype"] in ("rrhoxtb", "rrhoorca", "rrhotm"):
             print("\nStarting {} GRRHO calculations".format(njobs))
-        elif instructdict["jobtype"] is "nmrJ":
+        elif instructdict["jobtype"] == "nmrJ":
             print("\nStarting {} Coupling calculations".format(njobs))
-        elif instructdict["jobtype"] is "nmrS":
+        elif instructdict["jobtype"] == "nmrS":
             print("\nStarting {} Shielding calculations".format(njobs))
-        elif instructdict["jobtype"] is "gbsa_gsolv":
+        elif instructdict["jobtype"] == "gbsa_gsolv":
             print("\nStarting {} GBSA-Gsolv calculations".format(njobs))
-        elif instructdict["jobtype"] is "genericout":
+        elif instructdict["jobtype"] == "smd_gsolv":
+            print("\nStarting {} SMD-Gsolv calculations".format(njobs))
+        elif instructdict["jobtype"] == "genericout":
             print("\nWriting generic output!")
     time.sleep(0.5)
 
     # start working in parallel
-    for i in range(maxthreads):
+    for i in range(int(maxthreads)):
         worker = Thread(target=execute_data, args=(q, resultq))
         worker.setDaemon(True)
         worker.start()
     q.join()
 
-    if not instructdict.get("boltzmann", False):
+    if not instructdict.get("onlyread", False):
         print("Tasks completed!\n")
     else:
         print("Reading data from in previous run completed!\n")
@@ -6672,7 +6583,7 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
     ### end formatting information
     while not resultq.empty():
         results.append(resultq.get())
-        if instructdict["jobtype"] is "prep":
+        if instructdict["jobtype"] == "prep":
             if results[-1].success:
                 print(
                     "Preparation in {:{digits}} was successful".format(
@@ -6724,7 +6635,7 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                             digits=maxworkdirlen,
                         )
                     )
-        elif instructdict["jobtype"] is "sp":
+        elif instructdict["jobtype"] == "sp":
             if results[-1].energy is not None:
                 print(
                     "Finished single-point calculation for {:{digits}}: {:.6f} ".format(
@@ -6741,7 +6652,7 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                         digits=maxworkdirlen,
                     )
                 )
-        elif instructdict["jobtype"] is "solv":
+        elif instructdict["jobtype"] == "solv":
             if results[-1].gsolv is not None:
                 print(
                     "Finished Gsolv for {:{digits}}: {:.6f}".format(
@@ -6776,7 +6687,7 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                         digits=maxworkdirlen,
                     )
                 )
-        elif instructdict["jobtype"] is "nmrJ":
+        elif instructdict["jobtype"] == "nmrJ":
             if results[-1].success:
                 print(
                     "NMR-J calculation in {:{digits}} was successful.".format(
@@ -6789,7 +6700,7 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                         last_folders(results[-1].workdir, 2), digits=maxworkdirlen
                     )
                 )
-        elif instructdict["jobtype"] is "nmrS":
+        elif instructdict["jobtype"] == "nmrS":
             if results[-1].success:
                 print(
                     "NMR-S calculation in {:{digits}} was successful.".format(
@@ -6802,10 +6713,10 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                         last_folders(results[-1].workdir, 2), digits=maxworkdirlen
                     )
                 )
-        elif instructdict["jobtype"] is "gbsa_gsolv":
+        elif instructdict["jobtype"] == "gbsa_gsolv":
             if results[-1].gsolv is not None:
                 print(
-                    "Finished Gsolv-GBSA-Gsolv for {:{digits}}: {:.6f}".format(
+                    "Finished Gsolv-GBSA_Gsolv for {:{digits}}: {:.6f}".format(
                         last_folders(results[-1].workdir, 2),
                         results[-1].gsolv,
                         digits=maxworkdirlen,
@@ -6813,7 +6724,24 @@ def run_in_parallel(q, resultq, job, maxthreads, loopover, instructdict, foldern
                 )
             else:
                 print(
-                    "Gsolv-GBSA-Gsolv FAILED for {:{digits}}: {}".format(
+                    "Gsolv-GBSA_Gsolv FAILED for {:{digits}}: {}".format(
+                        last_folders(results[-1].workdir, 2),
+                        str(results[-1].gsolv),
+                        digits=maxworkdirlen,
+                    )
+                )
+        elif instructdict["jobtype"] == "smd_gsolv":
+            if results[-1].gsolv is not None:
+                print(
+                    "Finished Gsolv-SMD_Gsolv for {:{digits}}: {:.6f}".format(
+                        last_folders(results[-1].workdir, 2),
+                        results[-1].gsolv,
+                        digits=maxworkdirlen,
+                    )
+                )
+            else:
+                print(
+                    "Gsolv-SMD_Gsolv FAILED for {:{digits}}: {}".format(
                         last_folders(results[-1].workdir, 2),
                         str(results[-1].gsolv),
                         digits=maxworkdirlen,
@@ -6842,22 +6770,67 @@ def check_tasks(results, args, thresh=0.25):
 
 
 class handle_input:
-    """ Read ensorc, write ensorc, write flags.dat"""
+    """ Take care of all input related handling:
+     Read ensorc, write ensorc, write flags.dat, read and write enso.json"""
 
-    # add read_json write_json at some point, because they should be connected
+    # updated in init:
+    cwd = None
+    environsettings = None
+    # end updated in init
+    conformersxyz = "crest_conformers.xyz"
+    jsonfile = ""
+    firstrun = False
+    digilen = 60
+    namelength = 7
+    # pathsdefaults: --> read_program
+    orcapath = ""
+    orcaversion = ""
+    orca_old = False
+    xtbpath = ""
+    crestpath = ""
+    mpshiftpath = ""
+    escfpath = ""
+    cosmorssetup = None
+    dbpath = None
+    cosmothermversion = None
+
+    func_orca = ["pbeh-3c", "b97-3c", "tpss"]
+    func_tm = ["pbeh-3c", "b97-3c", "tpss"]
+    func3_orca = ["pw6b95", "pbe0", "wb97x", "dsd-blyp"]
+    func3_tm = ["pw6b95", "pbe0"]
+    funcJ_tm = ["tpss", "pbe0", "pbeh-3c"]
+    funcJ_orca = ["tpss", "pbe0", "pbeh-3c"]
+    funcS_tm = ["tpss", "pbe0", "pbeh-3c"]
+    funcS_orca = ["tpss", "pbe0", "dsd-blyp", "pbeh-3c", "kt2"]
+    impgfnv = ["gfn1", "gfn2", "gfnff"]
+    solvents = [
+        "acetone",
+        "chcl3",
+        "acetonitrile",
+        "ch2cl2",
+        "dmso",
+        "h2o",
+        "methanol",
+        "thf",
+        "toluene",
+        "gas",
+    ]
+    imphref = ["TMS",]
+    impcref = ["TMS",]
+    impfref = ["CFCl3",]
+    imppref = ["TMP", "PH3"]
+    impsiref = ["TMS",]
+    spectrumlist = []
+
+    sm_tm = ["cosmo", "dcosmors"]
+    sm_orca = ["cpcm", 'smd']
+    sm3_tm = ["cosmo", "dcosmors"]
+    sm3_orca = ["cpcm", 'smd']
+    sm4_tm = ["cosmo", "dcosmors"]
+    sm4_orca = ["cpcm", 'smd']
+    smgsolv2 = ["cosmors", "gbsa_gsolv", "smd_gsolv"]
 
     known_keys = (
-        "reference for 1H",
-        "reference for 13C",
-        "reference for 19F",
-        "reference for 31P",
-        "reference for 29Si",
-        "1H active",
-        "13C active",
-        "19F active",
-        "31P active",
-        "29Si active",
-        "resonance frequency",
         "nconf",
         "charge",
         "unpaired",
@@ -6866,6 +6839,7 @@ class handle_input:
         "ancopt",
         "prog_rrho",
         "gfn_version",
+        "temperature",
         "prog3",
         "prog4",
         "part1",
@@ -6877,26 +6851,36 @@ class handle_input:
         "func",
         "func3",
         "basis3",
+        "couplings",
         "funcJ",
         "basisJ",
+        "shieldings",
         "funcS",
         "basisS",
-        "couplings",
-        "shieldings",
         "part1_threshold",
         "part2_threshold",
         "sm",
+        "smgsolv2",
         "sm3",
         "sm4",
         "check",
         "crestcheck",
         "maxthreads",
         "omp",
-        "smgsolv2",
-        "temperature",
+        "reference for 1H",
+        "reference for 13C",
+        "reference for 19F",
+        "reference for 31P",
+        "reference for 29Si",
+        "1H active",
+        "13C active",
+        "19F active",
+        "31P active",
+        "29Si active",
+        "resonance frequency",
     )
     key_args_dict = {
-        "nconf": "nstruc",
+        "nconf": "nconf",
         "charge": "chrg",
         "unpaired": "unpaired",
         "solvent": "solv",
@@ -6947,59 +6931,106 @@ class handle_input:
     # später für unittest!
     # print(list(set(known_keys) - set(key_args_dict.keys())))
 
-    enso_internal_defaults = {
-        "reference for 1H": "TMS",
-        "reference for 13C": "TMS",
-        "reference for 19F": "CFCl3",
-        "reference for 31P": "TMP",
-        "reference for 29Si": "TMS",
-        "1H active": "on",
-        "13C active": "off",
-        "19F active": "off",
-        "31P active": "off",
-        "29Si active": "off",
-        "resonance frequency": "None",
-        "nconf": "all",
-        "charge": "0",
-        "unpaired": "0",
-        "solvent": "gas",
-        "prog": "None",
-        "ancopt": "on",
-        "prog_rrho": "xtb",
-        "gfn_version": "gfn2",
-        "temperature": "298.15",
-        "prog3": "prog",
-        "prog4": "prog",
-        "part1": "on",
-        "part2": "on",
-        "part3": "on",
-        "part4": "on",
-        "boltzmann": "off",
-        "backup": "off",
-        "func": "pbeh-3c",
-        "func3": "pw6b95",
-        "basis3": "def2-TZVPP",
-        "funcJ": "pbe0",
-        "basisJ": "def2-TZVP",
-        "funcS": "pbe0",
-        "basisS": "def2-TZVP",
-        "couplings": "on",
-        "shieldings": "on",
-        "part1_threshold": "4.0",
-        "part2_threshold": "2.0",
-        "sm": "default",
-        "smgsolv2": "sm",
-        "sm3": "default",
-        "sm4": "default",
-        "check": "on",
-        "crestcheck": "off",
-        "maxthreads": "1",
-        "omp": "1",
-    }
-    # später für unittest
-    # print(list(set(known_keys) - set(enso_internal_defaults.keys())))
+    enso_internal_defaults = OrderedDict([
+        ("nconf", None),
+        ("charge", "0"),
+        ("unpaired", "0"),
+        ("solvent", "gas"),
+        ("prog", None),
+        ("ancopt", "on"),
+        ("prog_rrho", "xtb"),
+        ("gfn_version", "gfn2"),
+        ("temperature", "298.15"),
+        ("prog3", "prog"),
+        ("prog4", "prog"),
+        ("part1", "on"),
+        ("part2", "on"),
+        ("part3", "on"),
+        ("part4", "on"),
+        ("boltzmann", "off"),
+        ("backup", "off"),
+        ("func", "pbeh-3c"),
+        ("func3", "pw6b95"),
+        ("basis3", "def2-TZVPP"),
+        ("couplings", "on"),
+        ("funcJ", "pbe0"),
+        ("basisJ", "def2-TZVP"),
+        ("shieldings", "on"),
+        ("funcS", "pbe0"),
+        ("basisS", "def2-TZVP"),
+        ("part1_threshold", "6.0"),
+        ("part2_threshold", "2.0"),
+        ("sm", "default"),
+        ("smgsolv2", "sm"),
+        ("sm3", "default"),
+        ("sm4", "default"),
+        ("check", "on"),
+        ("crestcheck", "off"),
+        ("maxthreads", "1"),
+        ("omp", "1"),
+        ("reference for 1H", "TMS"),
+        ("reference for 13C", "TMS"),
+        ("reference for 19F", "CFCl3"),
+        ("reference for 31P", "TMP"),
+        ("reference for 29Si", "TMS"),
+        ("1H active", "on"),
+        ("13C active", "off"),
+        ("19F active", "off"),
+        ("31P active", "off"),
+        ("29Si active", "off"),
+        ("resonance frequency", None),
+    ])
+    # enso_internal_defaults = {
+    #     "reference for 1H": "TMS",
+    #     "reference for 13C": "TMS",
+    #     "reference for 19F": "CFCl3",
+    #     "reference for 31P": "TMP",
+    #     "reference for 29Si": "TMS",
+    #     "1H active": "on",
+    #     "13C active": "off",
+    #     "19F active": "off",
+    #     "31P active": "off",
+    #     "29Si active": "off",
+    #     "resonance frequency": None,
+    #     "nconf": None,
+    #     "charge": "0",
+    #     "unpaired": "0",
+    #     "solvent": "gas",
+    #     "prog": None,
+    #     "ancopt": "on",
+    #     "prog_rrho": "xtb",
+    #     "gfn_version": "gfn2",
+    #     "temperature": "298.15",
+    #     "prog3": "prog",
+    #     "prog4": "prog",
+    #     "part1": "on",
+    #     "part2": "on",
+    #     "part3": "on",
+    #     "part4": "on",
+    #     "boltzmann": "off",
+    #     "backup": "off",
+    #     "func": "pbeh-3c",
+    #     "func3": "pw6b95",
+    #     "basis3": "def2-TZVPP",
+    #     "funcJ": "pbe0",
+    #     "basisJ": "def2-TZVP",
+    #     "funcS": "pbe0",
+    #     "basisS": "def2-TZVP",
+    #     "couplings": "on",
+    #     "shieldings": "on",
+    #     "part1_threshold": "6.0",
+    #     "part2_threshold": "2.0",
+    #     "sm": "default",
+    #     "smgsolv2": "sm",
+    #     "sm3": "default",
+    #     "sm4": "default",
+    #     "check": "on",
+    #     "crestcheck": "off",
+    #     "maxthreads": "1",
+    #     "omp": "1",
+    # }
 
-    knownbasissets3 = (
+    knownbasissets3 = [
         "SVP",
         "SV(P)",
         "TZVP",
@@ -7024,122 +7055,634 @@ class handle_input:
         "aug-cc-pVQZ",
         "aug-cc-pV5Z",
         "def2-QZVPP",
-    )
-    knownbasissetsJ = (
-        "SVP",
-        "SV(P)",
-        "TZVP",
-        "TZVPP",
-        "QZVP",
-        "QZVPP",
-        "def2-SV(P)",
-        "def2-SVP",
-        "def2-TZVP",
-        "def2-TZVPP",
-        "def-SVP",
-        "def-SV(P)",
-        "def2-QZVP",
-        "DZ",
-        "QZV",
-        "cc-pVDZ",
-        "cc-pVTZ",
-        "cc-pVQZ",
-        "cc-pV5Z",
-        "aug-cc-pVDZ",
-        "aug-cc-pVTZ",
-        "aug-cc-pVQZ",
-        "aug-cc-pV5Z",
-        "def2-QZVPP",
+        "minix",
+    ]
+    knownbasissetsJ = knownbasissets3 + [
         "pcJ-0",
         "pcJ-1",
         "pcJ-2",
-    )
-    knownbasissetsS = (
-        "SVP",
-        "SV(P)",
-        "TZVP",
-        "TZVPP",
-        "QZVP",
-        "QZVPP",
-        "def2-SV(P)",
-        "def2-SVP",
-        "def2-TZVP",
-        "def2-TZVPP",
-        "def-SVP",
-        "def-SV(P)",
-        "def2-QZVP",
-        "DZ",
-        "QZV",
-        "cc-pVDZ",
-        "cc-pVTZ",
-        "cc-pVQZ",
-        "cc-pV5Z",
-        "aug-cc-pVDZ",
-        "aug-cc-pVTZ",
-        "aug-cc-pVQZ",
-        "aug-cc-pV5Z",
-        "def2-QZVPP",
+         ]
+    knownbasissetsS = knownbasissets3 + [        
         "pcSseg-0",
         "pcSseg-1",
         "pcSseg-2",
         "pcSseg-3",
         "x2c-SVPall-s",
         "x2c-TZVPall-s",
-    )
+    ]
 
-    def __init__(
-        self, solvents, gfnv, func, func3, funcJ, funcS, href, cref, fref, pref, siref
-    ):
+    # for spectrumlist and old_spectrumlist
+    exnmractive = {"1H active": "1H", "13C active": "13C",
+                "19F active": "19F", "31P active": "31P", 
+                "29Si active": "29Si"}
+
+    def __init__(self):
+        # update:
+        self.cwd = os.getcwd()
+        self.environsettings = os.environ.copy()
+    
+        self.impfunc = set(self.func_orca + self.func_tm)
+        self.impfunc3 = set(self.func3_orca + self.func3_tm)
+        self.impfuncJ = set(self.funcJ_orca + self.funcJ_tm)
+        self.impfuncS = set(self.funcS_orca + self.funcS_tm)
+        self.impsm = set(self.sm_orca + self.sm_tm + ["default"])
+        self.impsmgsolv2 = set(self.smgsolv2 + ["sm"])
+        self.impsm3 = set(self.sm3_orca + self.sm3_tm + self.smgsolv2 + ["default"])
+        self.impsm4 = set(self.sm4_orca + self.sm4_tm + ["default"])
+
+        # update internal defaults specific to QM package
+        # orca
+        self.enso_internal_defaults_orca = self.enso_internal_defaults.copy()
+        self.enso_internal_defaults_orca["sm"] = "smd"
+        self.enso_internal_defaults_orca["sm3"] = "smd"
+        self.enso_internal_defaults_orca["sm4"] = "smd"
+        # tm
+        self.enso_internal_defaults_tm = self.enso_internal_defaults.copy()
+        self.enso_internal_defaults_tm["sm"] = "dcosmors"
+        self.enso_internal_defaults_tm["sm3"] = "dcosmors"
+        self.enso_internal_defaults_tm["sm4"] = "dcosmors"
+
         self.configdata = {}
         self.value_options = {
-            "part1": ("on", "off"),
-            "nconf": ("all", "number e.g. 10"),
-            "charge": "number e.g. 0",
-            "unpaired": "number e.g. 0",
-            "solvent": ("gas", solvents),
-            "prog": ("tm", "orca"),
-            "part2": ("on", "off"),
-            "part3": ("on", "off"),
-            "part4": ("on", "off"),
-            "prog3": ("tm", "orca", "prog"),
-            "prog4": ("tm", "orca", "prog"),
-            "ancopt": ("on", "off"),
-            "prog_rrho": ("xtb", "prog", "off"),
-            "gfn_version": gfnv,
-            "temperature": "temperature in K e.g. 298.15",
-            "boltzmann": ("on", "off"),
-            "backup": ("on", "off"),
-            "func": func,
-            "func3": func3,
-            "couplings": ("on", "off"),
+            "nconf": ["all", "number e.g. 10 up to all conformers"],
+            "charge": ["number e.g. 0",],
+            "unpaired": ["number e.g. 0",],
+            "solvent": self.solvents,
+            "prog": ["tm", "orca"],
+            "part1": ["on", "off"],
+            "part2": ["on", "off"],
+            "part3": ["on", "off"],
+            "part4": ["on", "off"],
+            "prog3": ["tm", "orca", "prog"],
+            "prog4": ["tm", "orca", "prog"],
+            "ancopt": ["on", "off"],
+            "prog_rrho": ["xtb", "prog", "off"],
+            "gfn_version": self.impgfnv,
+            "temperature": ["temperature in K e.g. 298.15",],
+            "boltzmann": ["on", "off"],
+            "backup": ["on", "off"],
+            "func": self.impfunc,
+            "func3": self.impfunc3,
+            "couplings": ["on", "off"],
             "basis3": self.knownbasissets3,
-            "funcJ": funcJ,
+            "funcJ": self.impfuncJ,
             "basisJ": self.knownbasissetsJ,
-            "funcS": funcS,
+            "funcS": self.impfuncS,
             "basisS": self.knownbasissetsS,
-            "reference for 1H": href,
-            "reference for 13C": cref,
-            "reference for 19F": fref,
-            "reference for 31P": pref,
-            "reference for 29Si": siref,
-            "1H active": ("on", "off"),
-            "13C active": ("on", "off"),
-            "19F active": ("on", "off"),
-            "31P active": ("on", "off"),
-            "29Si active": ("on", "off"),
-            "resonance frequency": "MHz number of your experimental spectrometer",
-            "shieldings": ("on", "off"),
-            "part1_threshold": "number e.g. 4.0",
-            "part2_threshold": "number e.g. 2.0",
-            "sm": ("cosmo", "dcosmors", "cpcm", "smd"),
-            "sm3": ("cosmors", "smd", "gbsa_gsolv"),
-            "sm4": ("cosmo", "cpcm", "smd"),
-            "check": ("on", "off"),
-            "crestcheck": ("on", "off"),
-            "maxthreads": "number e.g. 2",
-            "omp": "number e.g. 4",
-            "smgsolv2": ("sm", "cosmors", "gbsa_gsolv"),
+            "reference for 1H": self.imphref,
+            "reference for 13C": self.impcref,
+            "reference for 19F": self.impfref,
+            "reference for 31P": self.imppref,
+            "reference for 29Si": self.impsiref,
+            "1H active": ["on", "off"],
+            "13C active": ["on", "off"],
+            "19F active": ["on", "off"],
+            "31P active": ["on", "off"],
+            "29Si active": ["on", "off"],
+            "resonance frequency": ["MHz number of your experimental spectrometer setup",],
+            "shieldings": ["on", "off"],
+            "part1_threshold": ["number e.g. 4.0",],
+            "part2_threshold": ["number e.g. 2.0",],
+            "sm": self.impsm,
+            "sm3": self.impsm3,
+            "sm4": self.impsm4,
+            "check": ["on", "off"],
+            "crestcheck": ["on", "off"],
+            "maxthreads": ["number of threads e.g. 2",],
+            "omp": ["number cores per thread e.g. 4",],
+            "smgsolv2": self.impsmgsolv2,
         }
+
+    def read_json(self, jsonfile, args):
+        """Reading from jsonfile"""
+        self.jsonfile = jsonfile
+
+        json_defaults = OrderedDict([
+            ("crude_opt", "not_calculated"),
+            ("energy_crude_opt", None),
+            ("backup_for_part2", False),
+            ("consider_for_part2", True),
+            ("opt", "not_calculated"),
+            ("energy_opt", None),
+            ("backup_for_part3", False),
+            ("sp_part2_gas", "not_calculated"),  #new
+            ("sp_part2_solv", "not_calculated"),  #new
+            ("energy_sp_part2_gas", None),  #new
+            ("energy_sp_part2_solv", None),  #new
+            ("consider_for_part3", False),
+            ("sp_part3", "not_calculated"),
+            ("sp_part3_gas", "not_calculated"), #new
+            ("sp_part3_solv", "not_calculated"), #new
+            ("energy_sp_part3_gas", None),  #new
+            ("energy_sp_part3_solv", None), #new
+            ("energy_sp_part3", None),
+            ("cosmo-rs", "not_calculated"),
+            ("energy_cosmo-rs", None),
+            ("gbsa_gsolv", "not_calculated"),
+            ("energy_gbsa_gsolv", None),
+            ("smd_gsolv", "not_calculated"),
+            ("energy_smd_gsolv", None),
+            ("rrho", "not_calculated"),
+            ("rrho_xtb", "not_calculated"),  #new
+            ("rrho_tm", "not_calculated"),  #new
+            ("rrho_orca", "not_calculated"),  #new
+            ("energy_rrho_tm", None),  #new
+            ("energy_rrho_xtb", None),  #new
+            ("energy_rrho_orca", None),  #new
+            ("energy_rrho", None),
+            ("symmetry", "C1"),
+            ("consider_for_part4", False),
+            ("1H_J", "not_calculated"),
+            ("1H_S", "not_calculated"),
+            ("13C_J", "not_calculated"),
+            ("13C_S", "not_calculated"),
+            ("19F_J", "not_calculated"),
+            ("19F_S", "not_calculated"),
+            ("29Si_J", "not_calculated"),
+            ("29Si_S", "not_calculated"),
+            ("31P_J", "not_calculated"),
+            ("31P_S", "not_calculated"),
+            ("removed_by_user", False),
+            ("degeneracy", 1.0),
+            ("xtb_energy", None),
+        ])
+        conf_data = list(json_defaults.items())
+
+        j_list = ["1H_J", "13C_J", "19F_J", "31P_J", "29Si_J"]
+        s_list = ["1H_S", "13C_S", "19F_S", "31P_S", "29Si_S"]
+        parts_keys = [
+            "crude_opt",
+            "opt",
+            "sp_part2_gas", #new
+            "sp_part2_solv", #new
+            "cosmo-rs",
+            "gbsa_gsolv",
+            "smd_gsolv",
+            "rrho",
+            "rrho_xtb", #new
+            "rrho_tm", #new
+            "rrho_orca", #new
+            "sp_part3",
+            "sp_part3_gas", #new
+            "sp_part3_solv", #new
+            "1H_J",
+            "13C_J",
+            "19F_J",
+            "31P_J",
+            "29Si_J",
+            "1H_S",
+            "13C_S",
+            "19F_S",
+            "31P_S",
+            "29Si_S",
+        ]
+        parts_values = ["calculated", "failed", "not_calculated"]
+        keys_numbers = [
+            "energy_crude_opt",
+            "energy_opt",
+            "energy_sp_part2_gas",  #new
+            "energy_sp_part2_solv", # new
+            "energy_sp_part3",
+            "energy_sp_part3_gas", #new
+            "energy_sp_part3_solv", #new
+            "energy_cosmo-rs",
+            "energy_gbsa_gsolv",
+            "energy_smd_gsolv",
+            "energy_rrho",
+            "energy_rrho_tm",  # new
+            "energy_rrho_xtb",  #new
+            "energy_rrho_orca", #new
+            "degeneracy", #new
+            "xtb_energy", #new
+        ]
+        keys_true_false = [
+            "consider_for_part2",
+            "consider_for_part3",
+            "consider_for_part4",
+            "backup_for_part2",
+            "backup_for_part3",
+            "removed_by_user",
+        ]
+        value_symmetry = ['C1', 'Cs', 'Ci', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'C2v', 'C3v', 'C4v', 'C5v', 'C6v', 'C7v', 'C8v', 'C2h', 'C3h', 'C4h', 'C5h', 'C6h', 'C7h', 'C8h', 'D2h', 'D3h', 'D4h', 'D5h', 'D6h', 'D7h', 'D8h', 'D2d', 'D3d', 'D4d', 'D5d', 'D6d', 'D7d', 'D8d', 'S4', 'S6', 'S8', 'T', 'Th', 'Td', 'O', 'Oh', 'Cinfv', 'Dinfh', 'I', 'Ih', 'Kh']
+        # must not be changed (concerning optimization)
+        flags_unchangable = [
+            "unpaired",
+            "chrg",
+            "solv",
+            "prog",
+            "ancopt",
+            "func",
+            "sm",
+        ]
+        # might be changed, but data may be lost/overwritten
+        # hactive ... can 
+        flags_changable = [
+            "rrhoprog",
+            "gfnv",
+            "prog4",
+            "func3",
+            "basis3",
+            "funcJ",
+            "basisJ",
+            "funcS",
+            "basisS",
+            "gsolv2",
+            "sm3",
+            "sm4",
+        ]
+
+        # all other flags of previous run are not affecting restart (e.g. OMP)
+        if os.path.isfile(os.path.join(self.cwd, jsonfile)):
+            print("Reading file: {}\n".format(os.path.basename(jsonfile)))
+            self.firstrun = False
+            try:
+                with open(
+                    os.path.join(self.cwd, jsonfile), "r", encoding=coding, newline=None
+                ) as inp:
+                    json_dict = json.load(inp, object_pairs_hook=OrderedDict)
+            except Exception as error:
+                print("Your Jsonfile (enso.json) is corrupted!\n{}".format(error))
+                sys.exit(1)
+
+            # if do printout only read with exactly the same flags
+            if args.doprintout:
+                for item in json_dict["flags"]:
+                    setattr(args, item, json_dict["flags"][item])
+                setattr(args, 'doprintout', True)
+                setattr(args, 'check', False)
+
+            # check if all args in flagskey are the same
+            flags_dict = vars(args)
+            error_logical = False
+            for i in flags_changable:
+                if i not in json_dict["flags"]:
+                    print("ERROR: flag {} is missing in {}!".format(i, jsonfile))
+                    print("       Information necessary for restart is not complete,"
+                    " fix this before restarting!")
+                    error_logical = True
+            for i in flags_unchangable:
+                if i not in json_dict["flags"]:
+                    print("ERROR: flag {} is missing in {}!".format(i, jsonfile))
+                    print("       Information necessary for restart is not complete,"
+                    " fix this before restarting!")
+                    error_logical = True
+                elif json_dict["flags"][i] != flags_dict[i]:
+                    print(
+                          "ERROR: flag {} was changed from {} to {}!".format(
+                            i, json_dict["flags"][i], flags_dict[i]))
+                    print("       All flags which are concerned with geometry "
+                          "optimization (func, prog, ancopt, sm, solv, chrg, "
+                          "unpaired) are not allowed to be changed!")
+                    print("If you want to change these settings, "
+                          "start from scratch in a new folder!")
+                    error_logical = True
+            if error_logical:
+                print(
+                    "One or multiple flags from the previous run were changed "
+                    "or are missing in the file enso.json!\nGoing to exit."
+                )
+                sys.exit(1) 
+            if args.run:
+                # add conformers if necessary
+                for i in range(1, args.nconf + 1):
+                    conf = "".join("CONF" + str(i))
+                    if conf not in [j for j in json_dict.keys()]:
+                        json_dict[conf] = OrderedDict(conf_data.copy())
+                        print("{} is added to the file enso.json.".format(conf))
+
+            # check for missing information, add defaults if necessary and
+            # check information for corecctness if exists:
+            for item in json_dict.keys():
+                if "CONF" in item: 
+                    for key in parts_keys:
+                        if key not in json_dict[item]:
+                            print(
+                                "WARNING: Information about {} for {} in the file "
+                                "{} is missing!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            print("         The missing information is now "
+                            "updated with default values!")
+                            json_dict[item][key] = json_defaults[key]
+                        elif json_dict[item][key] not in parts_values:
+                            print(
+                                "ERROR: Information about {} for {} in the file "
+                                "{} is not recognized!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            error_logical = True
+                    for key in keys_numbers:
+                        if key not in json_dict[item]:
+                            print(
+                                "WARNING: Information about {} for {} in the file "
+                                "{} is missing!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            print("         The missing information is now "
+                                  "updated with default values!")
+                            json_dict[item][key] = json_defaults[key]
+                        elif json_dict[item][key] is not None and not isinstance(json_dict[item][key], float):
+                            print(
+                                "ERROR: Information about {} for {} in the file "
+                                "{} is not recognized!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            error_logical = True
+                    for key in keys_true_false:
+                        if key not in json_dict[item]:
+                            print(
+                                "ERROR: Information about {} for {} in the file "
+                                "{} is missing!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            print("         The missing information is now "
+                                  "updated with default values!")
+                            json_dict[item][key] = json_defaults[key]
+                        elif json_dict[item][key] not in (True, False):
+                            print(
+                                "ERROR: Information about {} for {} in the file "
+                                "{} is not recognized!".format(key, item, os.path.basename(jsonfile))
+                            )
+                            error_logical = True
+                    if "symmetry" not in json_dict[item]:
+                        print(
+                            "Warning: Information about {} for {} in the file {} "
+                            "is missing!".format("symmetry", item, jsonfile)
+                        )
+                        print("         The missing information is now "
+                                  "updated with default values!")
+                        json_dict[item]["symmetry"] = json_defaults["symmetry"]
+                    elif json_dict[item]["symmetry"] not in value_symmetry + [i[0].lower()+i[1:] for i in value_symmetry]:
+                        print(
+                                "ERROR: Information about {} for {} in the file "
+                                "{} is not recognized!".format('symmetry', item, os.path.basename(jsonfile))
+                            )
+                        error_logical = True
+            if error_logical:
+                print(
+                    "One or multiple errors were found in the file {}.\nGoing to "
+                    "exit.".format(jsonfile)
+                )
+                sys.exit(1)
+            # END check of flags
+
+            # modify json_dict if a flag was changed, compared to previous run!
+            #-------------------------------------------------------------------
+            # change of gfnv --> gbsa_gsolv, rrho
+            if json_dict["flags"]["gfnv"] != flags_dict["gfnv"]:
+                print("WARNING: The GFNn-/GFNFF-xTB version is changed with respect to the previous run. (gfnv {} --> {})\n"
+                      "         energy_rrho_xtb and gbsa_gsolv is reset for all conformers.".format(json_dict["flags"]["gfnv"], flags_dict["gfnv"]))
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        #rrho
+                        json_dict[i]["energy_rrho_xtb"] = json_defaults["energy_rrho_xtb"]
+                        json_dict[i]["rrho_xtb"] = json_defaults["rrho_xtb"]
+                        #gsolv2 
+                        json_dict[i]["energy_gbsa_gsolv"] = json_defaults["energy_gbsa_gsolv"]
+                        json_dict[i]["gbsa_gsolv"] = json_defaults["gbsa_gsolv"] # gbsa_gsolv not calculated
+            #-------------------------------------------------------------------
+            # change of rrhoprog 
+            exrrho = {'xtb': 'energy_rrho_xtb', 'tm': 'energy_rrho_tm', 'orca': 'energy_rrho_orca', False: 'energy_rrho'}
+            exrrhopart = {'xtb': 'rrho_xtb', 'tm': 'rrho_tm', 'orca': 'rrho_orca', False: 'rrho'}
+            if json_dict["flags"]["rrhoprog"] != flags_dict["rrhoprog"]:
+                new = flags_dict["rrhoprog"]
+                print(
+                    "WARNING: The program for calculating GRRHO was changed "
+                    "with respect to the previous run. (rrhoprog {} --> {})".format(json_dict["flags"]["rrhoprog"], new)
+                )
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        #rrho assign energy_rrho_qm to energy_rrho
+                        if not new: # rrho set to off
+                            json_dict[i]["energy_rrho"] = json_defaults["energy_rrho"]
+                            json_dict[i]["rrho"] = json_defaults["rrho"]
+                        else:
+                            json_dict[i]["energy_rrho"] = json_dict[i][exrrho[new]]
+                            json_dict[i]["rrho"] = json_dict[i][exrrhopart[new]]
+                            if json_dict[i][exrrho[new]] == "failed":
+                                json_dict[i]["energy_rrho"] = json_defaults["energy_rrho"] # None
+            #-------------------------------------------------------------------
+            # change of Temperature
+            if json_dict["flags"]["temperature"] != flags_dict["temperature"]:
+                print(
+                    "WARNING: The temperature has been changed with respect to the "
+                    "previous run.(temperature {} --> {})\n        GRRHO is reset to not calculated for "
+                    "all conformers.".format(json_dict["flags"]["temperature"],flags_dict["temperature"])
+                )
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        json_dict[i]["rrho"] = json_defaults["rrho"]
+                        json_dict[i]["rrho_xtb"] = json_defaults["rrho_xtb"]
+                        json_dict[i]["rrho_tm"] = json_defaults["rrho_tm"]
+                        json_dict[i]["rrho_orca"] = json_defaults["rrho_orca"]
+                        json_dict[i]["energy_rrho"] = json_defaults["energy_rrho"]
+                        json_dict[i]["energy_rrho_xtb"] = json_defaults["energy_rrho_xtb"]
+                        json_dict[i]["energy_rrho_orca"] = json_defaults["energy_rrho_orca"]
+                        json_dict[i]["energy_rrho_tm"] = json_defaults["energy_rrho_tm"]
+            #-------------------------------------------------------------------
+            # smgsolv2 
+            if json_dict["flags"]["solv"] in ('gas', None):
+                pass 
+            else: # in solution
+                exgsolv2 = {'cosmo-rs': 'energy_cosmo-rs', 'gbsa_gsolv': 'energy_gbsa_gsolv', 'smd_gsolv': 'energy_smd_gsolv'}
+                if json_dict["flags"]["gsolv2"] != flags_dict["gsolv2"]:
+                    print(
+                    "WARNING: smgsolv2 was changed "
+                    "with respect to the previous run. (smgsolv2 {} --> {})".format(json_dict["flags"]["gsolv2"], flags_dict["gsolv2"])
+                )
+                    if flags_dict["gsolv2"] in self.smgsolv2: #(no 'sm')
+                        print("         The single-point for part2 in gas phase needs to be "
+                        "evaluated in this run!")
+            #-------------------------------------------------------------------
+            # Change in part3: prog3 func3 basis3
+            if (json_dict["flags"]["prog3"]!= flags_dict["prog3"] or 
+                json_dict["flags"]["func3"]!= flags_dict["func3"] or
+                json_dict["flags"]["basis3"]!= flags_dict["basis3"]):
+                print(
+                    "WARNING: The program, basis set or functional for part3 was changed "
+                    "with respect to the previous run. (previous: {} {} {} --> now: {} {} {})\n"
+                    "         The single point for part3 is reset to not "
+                    "calculated for all conformers!".format(
+                    json_dict["flags"]["prog3"], json_dict["flags"]["func3"],
+                    json_dict["flags"]["basis3"],flags_dict["prog3"],
+                    flags_dict["func3"],flags_dict["basis3"])
+                )
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        # reset energy part3
+                        json_dict[i]["energy_sp_part3"] = json_defaults["energy_sp_part3"] #None
+                        json_dict[i]["energy_sp_part3_gas"] = json_defaults["energy_sp_part3_gas"] #None
+                        json_dict[i]["energy_sp_part3_solv"] = json_defaults["energy_sp_part3_solv"] #None
+                        json_dict[i]["sp_part3"] = json_defaults["sp_part3"] # not calculated
+                        json_dict[i]["sp_part3_gas"] = json_defaults["sp_part3_gas"] # not calculated
+                        json_dict[i]["sp_part3_solv"] = json_defaults["sp_part3_solv"] # not calculated
+            # sm3 
+            if json_dict["flags"]["solv"] in ('gas', None):
+                pass
+            else: # in solution:
+                if json_dict["flags"]["sm3"] != flags_dict["sm3"]:
+                    # sm3 only in implicit solvation
+                    #  sm3 is calculated with the single point --> single point in solv has to be reset!
+                    if flags_dict["sm3"] in [sm3 for sm3 in self.value_options["sm3"] if sm3 not in self.impsmgsolv2]:
+                        print(
+                        "WARNING: The solvent model for part3 (sm3) was changed to an implicit solvation model"
+                        "with respect to the previous run. (sm3: {} --> {})\n"
+                        "         The single-point for part3 in implicit solvation is reset to not "
+                        "calculated for all conformers!".format(json_dict["flags"]["sm3"],flags_dict["sm3"])
+                        )
+                        for i in json_dict.keys():
+                            if "CONF" in i:
+                                #energy = "energy_sp_part3_solv"
+                                json_dict[i]["energy_sp_part3"] = json_defaults["energy_sp_part3"]
+                                json_dict[i]["sp_part3"] = json_defaults["sp_part3"]
+                                json_dict[i]["energy_sp_part3_solv"] = json_defaults["energy_sp_part3_solv"]
+                                json_dict[i]["sp_part3_solv"] = json_defaults["sp_part3_solv"]
+                    # sm3 only in implicit solvation
+                    # easier case since gas phase energy can be used and only additive solvation has to be calculated
+                    elif flags_dict["sm3"] in self.smgsolv2:
+                        print(
+                        "WARNING: The solvent model for part3 (sm3) was changed "
+                        "to an additive solvation model "
+                        "with respect to the previous run. (sm3: {} --> {})\n".format(
+                        json_dict["flags"]["sm3"],flags_dict["sm3"]))
+                        if json_dict["flags"]["sm3"] not in self.smgsolv2:
+                            print("         The single-point for part3 in gas phase needs to be "
+                                  "evaluated in this run!")
+                        for i in json_dict.keys():
+                            if "CONF" in i:
+                                json_dict[i]["energy_sp_part3"] = json_dict[i]["energy_sp_part3_gas"]
+                                json_dict[i]["sp_part3"] = json_dict[i]["sp_part3_gas"]
+            #-------------------------------------------------------------------
+            # Change in part4: prog4 or sm4
+            if (json_dict["flags"]["prog4"]!= flags_dict["prog4"] or
+               json_dict["flags"]["sm4"] != flags_dict["sm4"]):
+                print(
+                    "WARNING: The program (prog4) or solvent model (sm4) for part4 was changed "
+                    "with respect to the previous run. (previous: {} {} --> now: {} {})\n"
+                    "         The property calculations (shift and coupling) "
+                    "are reset for all conformers!".format(
+                    json_dict["flags"]["prog4"], json_dict["flags"]["sm4"],
+                    flags_dict["prog4"], flags_dict["sm4"])
+                )
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        for j in j_list + s_list:
+                            # example: json_dict[i]["13C_J"] = json_defaults["13C_J"] # not_calculated
+                            json_dict[i][j] = json_defaults[j] # not_calculated
+            else:# already reset everything!
+                #-------------------------------------------------------------------
+                # Change in part4: basisJ or funcJ
+                if (json_dict["flags"]["funcJ"]!= flags_dict["funcJ"] or 
+                    json_dict["flags"]["basisJ"]!= flags_dict["basisJ"]):
+                    print(
+                        "WARNING: The basis set (basisJ) or functional (funcJ) for "
+                        "coupling constant calculation was changed "
+                        "with respect to the previous run. (previous: {} {} --> now: {} {})\n"
+                        "         The coupling calculations are reset to not "
+                        "calculated for all conformers!".format(
+                        json_dict["flags"]["funcJ"], json_dict["flags"]["basisJ"],
+                        flags_dict["funcJ"],flags_dict["basisJ"])
+                    )
+                    for i in json_dict.keys():
+                        if "CONF" in i:
+                            for j in j_list:
+                                #json_dict[i]["1H_J"] = json_defaults["1H_J"] # not_calculated
+                                json_dict[i][j] = json_defaults[j] # not_calculated
+                #-------------------------------------------------------------------
+                # Change in part4: basisS or funcS
+                if (json_dict["flags"]["funcS"]!= flags_dict["funcS"] or 
+                    json_dict["flags"]["basisS"]!= flags_dict["basisS"]):
+                    print(
+                        "WARNING: The basis set (basisS) or functional (funcS) for "
+                        "shielding constant calculation was changed "
+                        "with respect to the previous run. (previous: {} {} --> now: {} {})\n"
+                        "         The shielding calculations are reset to not "
+                        "calculated for all conformers!".format(
+                        json_dict["flags"]["funcS"], json_dict["flags"]["funcS"],
+                        flags_dict["funcS"],flags_dict["basisS"])
+                    )
+                    for i in json_dict.keys():
+                        if "CONF" in i:
+                            for j in s_list:
+                                #json_dict[i]["1H_S"] = json_defaults["1H_S"] # not_calculated
+                                json_dict[i][j] = json_defaults[j] # not_calculated
+            #-------------------------------------------------------------------
+            # spectrumlist
+            #  if list of nmractive elements is changed (extended), 
+            # the calculation needs to be reset ( e.g previous 1H , now 1H, 13C)
+            old_spectrumlist = []
+            for key in self.exnmractive.keys():
+                if json_dict["flags"].get(self.key_args_dict[key], None) is not None:
+                    old_spectrumlist.append(self.exnmractive[key])
+            old_spectrumlist = list(set(old_spectrumlist))
+            if set(old_spectrumlist) < set(self.spectrumlist):
+                print("WARNING: An additional NMR active element is selected,"
+                      " which has not been calculated in a previous run! (previous: {} --> now: {} )\n"
+                      "         Therefore all property calculations "
+                      "in Part4 are reset!".format(old_spectrumlist, self.spectrumlist))
+                for i in json_dict.keys():
+                    if "CONF" in i:
+                        for j in j_list + s_list:
+                            # example: json_dict[i]["13C_J"] = json_defaults["13C_J"] # not_calculated
+                            json_dict[i][j] = json_defaults[j] # not_calculated
+            #-------------------------------------------------------------------
+            # Set everything up correctly:
+            # for part1:
+            for i in json_dict.keys():
+                if "CONF" in i:
+                    if json_dict[i]["crude_opt"] == "failed":
+                        json_dict[i]["energy_crude_opt"] = json_defaults["energy_crude_opt"]
+            # for part2 and rrho part2/3:
+            for i in json_dict.keys():
+                if "CONF" in i:
+                    # set rrho correctly:
+                    if json_dict[i][exrrhopart[args.rrhoprog]] in ('not_calculated', 'failed'):
+                        json_dict[i]["rrho"] = json_dict[i][exrrhopart[args.rrhoprog]]
+                        json_dict[i][exrrho[args.rrhoprog]] = json_defaults[exrrho[args.rrhoprog]]
+                    else:
+                        json_dict[i]["rrho"] = json_dict[i][exrrhopart[args.rrhoprog]]
+                        json_dict[i][exrrho[args.rrhoprog]] = json_dict[i][exrrho[args.rrhoprog]]
+                    # change of gsolv2 is performed above
+            # for part3:
+            for i in json_dict.keys():
+                if "CONF" in i:
+                    if flags_dict["sm3"] in self.smgsolv2 or args.solv in ("gas", None):
+                        json_dict[i]["energy_sp_part3"] = json_dict[i]["energy_sp_part3_gas"]
+                        json_dict[i]["sp_part3"] = json_dict[i]["sp_part3_gas"]
+                    else: # in solution
+                        json_dict[i]["energy_sp_part3"] = json_dict[i]["energy_sp_part3_solv"]
+                        json_dict[i]["sp_part3"] = json_dict[i]["sp_part3_solv"]
+                    # change of RRHO is performed above
+                    # change of gsolv2 is performed above
+            #-------------------------------------------------------------------
+            # copy json to json#1 and so on
+            if not args.doprintout:
+                move_recursively(self.cwd, os.path.basename(jsonfile))
+        else: # enso.json already exists!
+            if args.run:
+                print(
+                    "The file {} containing all results does not exist yet,\nand "
+                    "is written during this run.\n".format(os.path.basename(jsonfile))
+                )
+            self.firstrun = True
+            tmp = []
+            tmp.append(("flags", OrderedDict()))
+            for i in range(1, args.nconf + 1):
+                conf = "".join("CONF" + str(i))
+                tmp.append((conf, OrderedDict(conf_data.copy())))
+            json_dict = OrderedDict(tmp)
+        json_dict["flags"] = OrderedDict(vars(args))
+        self.json_dict = json_dict
+        return
+
+
+    def write_json(self, instruction):
+        """Writing jsonfile"""
+        if instruction == "save_and_exit":
+            outfile = "".join("error_" + os.path.basename(self.jsonfile))
+        else:
+            outfile = os.path.basename(self.jsonfile)
+        print("Results are written to {}.".format(os.path.basename(outfile)))
+        with open(outfile, "w") as out:
+            json.dump(self.json_dict, out, indent=4, sort_keys=False)
+        if instruction == "save_and_exit":
+            print("\nGoing to exit.")
+            sys.exit(1)
 
     def _decomment(self, csvfile):
         """ remove any comments from file before parsing with csv.DictReader"""
@@ -7150,14 +7693,15 @@ class handle_input:
                 yield raw2
         return
 
-    def _read_config(self, path, test):
-        """ Read from config data from file (here flags.dat or .ensorc"""
+    def _read_config(self, path, startread, args):
+        """ Read from config data from file (here flags.dat or .ensorc),
+            if reading from ensorc also consider commmandline input!"""
         configdata = {}
         with open(path, "r") as csvfile:
             # skip header:
             while True:
                 line = csvfile.readline()
-                if line.startswith(test) or line.startswith("$"):
+                if line.startswith(startread) or line.startswith("$"):
                     break
                 else:
                     pass
@@ -7173,87 +7717,65 @@ class handle_input:
                 else:
                     configdata[row["key"]] = row["value"]
         self.configdata = configdata
-        return
-
-    def read_ensorc_data(self, args, path, startreading):
-        """ check configdata for typos"""
-        print("Reading user set defaults (ensorc).")
-        self._read_config(path, startreading)
-        error_logical = False
-        # check keys:
+        print("Reading information from {}.".format(os.path.basename(path)))
+        # error_logical is set true if an error occurs and program has to be aborted
         if "end" in self.configdata:
             del self.configdata["end"]
+
+        # get data from commandline only when reading .ensorc
+        if not os.path.basename(path) == 'flags.dat':
+            args_key = {v: k for k, v in self.key_args_dict.items()}
+            cmlflags = vars(args)
+            for key in cmlflags.keys():
+                if args_key.get(key, None) is not None: 
+                    if cmlflags[key] not in (False, None):
+                        #print('-------->', args_key[key], cmlflags[key])
+                        #print(self.configdata[args_key.get(key)])
+                        self.configdata[args_key.get(key)] = cmlflags[key]
+                        #print(self.configdata[args_key.get(key)])
+        # end get commandline arguments
         readinkeys = []
         for item in self.configdata:
             if item not in self.known_keys:
-                print("WARNING: {} is not a known keyword in ensorc.".format(item))
-                error_logical = True
+                print("WARNING: {} is not a known keyword in {}.".format(item, os.path.basename(path)))
             else:
                 readinkeys.append(item)
         diff = list(set(self.known_keys) - set(readinkeys))
         if diff:
             print(
-                "WARNING: These keywords were not found in your ensorc \n"
-                "         and therefore default values are taken "
-                "for: {}".format(diff)
+                "WARNING: These keywords were not found in the configuration "
+                "file {}\n         and therefore default "
+                "values are taken for:". format(os.path.basename(path))
             )
             for item in diff:
+                print("         {}".format(item))
                 self.configdata[item] = self.enso_internal_defaults[item]
-                print(
-                    'WARNING: for keyword: "{}" the default: "{}" has been set!'.format(
-                        item, self.enso_internal_defaults[item]
-                    )
-                )
-        # choices:
+
         for key in self.configdata:
             if self.configdata[key] == "":
                 self.configdata[key] = None
-        # if error_logical:
-        # print('You can choose from: {}'.format(self.known_keys))
-        # print('An error has occured!')
-
-        # ensorc value data is not checked --> done later on
-        # --> cml >> ensorc
-        for key, value in self.key_args_dict.items():
-            if key in self.configdata and not getattr(args, value):
-                try:
-                    setattr(args, value, self.configdata[key])
-                except:
-                    pass
         return
 
-    def read_program_paths(self, path):
+    def read_program_paths(self,path):
         """Get absolute paths of programs employed in enso"""
-        # read program paths
-        print("Reading absolute paths of programs employed in ENSO.")
-        dbpath = None
-        cosmothermversion = None
-        cosmorssetup = None
-        orcapath = None
-        crestpath = None
-        xtbpath = None
-        mpshiftpath = None
-        escfpath = None
-        orca_old = None
-        orcaversion = None
-
         with open(path, "r") as inp:
             stor = inp.readlines()
         for line in stor:
             if "ctd =" in line:
                 try:
-                    cosmorssetup = str(line.rstrip(os.linesep))
+                    self.cosmorssetup = str(line.rstrip(os.linesep))
                 except:
                     print(
                         "WARNING: could not read settings for COSMO-RS from" " .ensorc!"
                     )
                 try:
-                    dbpath = os.path.join(
-                        os.path.split(cosmorssetup.split()[5].strip('"'))[0],
+                    self.dbpath = os.path.join(
+                        os.path.split(self.cosmorssetup.split()[5].strip('"'))[0],
                         "DATABASE-COSMO/BP-TZVP-COSMO",
                     )
-                    os.path.isdir(dbpath)
-                except:
+                    os.path.isdir(self.dbpath)
+                except Exception as e:
+                    print(e)
                     print(
                         "WARNING: could not read settings for COSMO-RS from "
                         ".ensorc!\nMost probably there is a user "
@@ -7261,7 +7783,7 @@ class handle_input:
                     )
             if "cosmothermversion:" in line:
                 try:
-                    cosmothermversion = int(line.split()[1])
+                    self.cosmothermversion = int(line.split()[1])
                 except:
                     print(
                         "WARNING: cosmothermversion could not be read! This "
@@ -7269,7 +7791,7 @@ class handle_input:
                     )
             if "ORCA:" in line:
                 try:
-                    orcapath = str(line.split()[1])
+                    self.orcapath = str(line.split()[1])
                 except:
                     print("WARNING: could not read path for ORCA from " ".ensorc!.")
             if "ORCA version:" in line:
@@ -7282,56 +7804,47 @@ class handle_input:
                         orca_old = True
                     elif float(tmp) >= 4.1:
                         orca_old = False
-                    orcaversion = tmp
+                    self.orcaversion = tmp
                 except:
                     print("WARNING: could not read ORCA version from " ".ensorc!")
             if "GFN-xTB:" in line:
                 try:
-                    xtbpath = str(line.split()[1])
+                    self.xtbpath = str(line.split()[1])
                 except:
                     print("WARNING: could not read path for GFNn-xTB from .ensorc!")
                     if shutil.which("xtb") is not None:
-                        xtbpath = shutil.which("xtb")
-                        print("Going to use {} instead.".format(xtbpath))
+                        self.xtbpath = shutil.which("xtb")
+                        print("Going to use {} instead.".format(self.xtbpath))
             if "CREST:" in line:
                 try:
-                    crestpath = str(line.split()[1])
+                    self.crestpath = str(line.split()[1])
                 except:
                     print("WARNING: could not read path for CREST from .ensorc!")
                     if shutil.which("crest") is not None:
-                        crestpath = shutil.which("crest")
-                        print("Going to use {} instead.".format(crestpath))
+                        self.crestpath = shutil.which("crest")
+                        print("Going to use {} instead.".format(self.crestpath))
             if "mpshift:" in line:
                 try:
-                    mpshiftpath = str(line.split()[1])
+                    self.mpshiftpath = str(line.split()[1])
                 except:
                     print("ẂARNING: could not read path for mpshift from " ".ensorc!")
             if "escf:" in line:
                 try:
-                    escfpath = str(line.split()[1])
+                    self.escfpath = str(line.split()[1])
                 except:
                     print("WARNING: could not read path for escf from " ".ensorc!")
-        return (
-            dbpath,
-            cosmothermversion,
-            cosmorssetup,
-            orcapath,
-            crestpath,
-            xtbpath,
-            mpshiftpath,
-            escfpath,
-            orca_old,
-            orcaversion,
-        )
+            if '$ENDPROGRAMS' in line:
+                break
 
-    def write_ensorc(self):
+
+    def write_ensorc(self, filename):
         """ write an ensorc-new file into your current directory"""
 
         # name of file
         # remember to update paths in ensorc and adjust personal settings
         # move ensorc to /home/$USER/
         try:
-            with open("ensorc-new", "w", newline=None) as outdata:
+            with open(filename, "w", newline=None) as outdata:
                 outdata.write(".ENSORC\n")
                 outdata.write("\n")
                 outdata.write("ORCA: /path/excluding/binary/\n")
@@ -7351,1067 +7864,720 @@ class handle_input:
                 outdata.write("\n")
                 outdata.write("$ENDPROGRAMS\n\n")
                 outdata.write("#NMR data\n")
-                for item in self.enso_internal_defaults:
-                    keylen = len(item)
+                for key in self.enso_internal_defaults:
+                    value = self.enso_internal_defaults[key]
+                    options = self.value_options.get(key, "possibilities")
+                    if key == 'nconf' and value is None:
+                        value = 'all'
                     outdata.write(
                         "{}: {:{digits}} # {} \n".format(
-                            item,
-                            self.enso_internal_defaults[item],
-                            self.value_options.get(item, "possibilities"),
-                            digits=40 - keylen,
+                            key,
+                            str(value),
+                            options,
+                            digits=40 - len(key),
                         )
                     )
         except:
             pass
+        time.sleep(0.1)
         return
 
-    def write_flags(
-        self,
-        args,
-        solvents,
-        func,
-        func3,
-        funcJ,
-        funcS,
-        gfnv,
-        href,
-        cref,
-        fref,
-        pref,
-        siref,
-    ):
-        """ Write file "flags.dat" with restart options"""
-        if args.boltzmann == "on":
-            args.part1 = "off"
-            args.part2 = "off"
-            args.part3 = "on"
-            args.part4 = "off"
-        if args.solv and args.solv != "gas":  # if solvent model is used
-            if args.part1 == "on" or args.part2 == "on":
-                if args.prog == "tm":
-                    if args.sm == "dcosmors" or args.sm == "cosmo":
-                        pass
-                    elif args.sm is None or args.sm == "default":
-                        args.sm = "dcosmors"
-                        print(
-                            "WARNING: DCOSMO-RS is used as default solvent model "
-                            "with TM."
-                        )
-                    else:
-                        args.sm = "dcosmors"
-                        print(
-                            """WARNING: solvent model for part 1 and 2 is not recognized! Options for TM are COSMO 
-                               (cosmo) or DCOSMO-RS (dcosmors). Solvent model is set to TM default DCOSMO-RS."""
-                        )
-                elif args.prog == "orca":
-                    if args.sm == "cpcm" or args.sm == "smd":
-                        pass
-                    elif args.sm is None or args.sm == "default":
-                        args.sm = "smd"
-                        print(
-                            "WARNING: SMD is used as default solvent model with ORCA."
-                        )
-                    else:
-                        args.sm = "smd"
-                        print(
-                            """WARNING: solvent model for part 1 and 2 is not recognized! Options for ORCA are CPCM
-                              (cpcm) or SMD (smd). solvent model is set to ORCA default SMD."""
-                        )
-        with open(os.path.join(os.getcwd(), "flags.dat"), "w", newline=None) as inp:
-            inp.write("FLAGS\n")
-            if args.nstruc:
-                inp.write(
-                    "nconf: {:{digits}} # all or integer between 0 and total number of conformers\n".format(
-                        str(args.nstruc), digits=40 - len("nconf")
-                    )
-                )
-            else:
-                inp.write(
-                    "nconf: {:{digits}} # all or integer between 0 and total number of conformers\n".format(
-                        "all", digits=40 - len("nconf")
-                    )
-                )
-            inp.write(
-                "charge: {:{digits}} # integer\n".format(
-                    str(args.chrg), digits=40 - len("charge")
-                )
-            )
-            inp.write(
-                "unpaired: {:{digits}} # integer\n".format(
-                    str(args.unpaired), digits=40 - len("unpaired")
-                )
-            )
-            if args.solv:
-                inp.write(
-                    "solvent: {:{digits}} # {} \n".format(
-                        str(args.solv), ", ".join(solvents), digits=40 - len("solvent")
-                    )
-                )
-            else:
-                inp.write(
-                    "solvent: {:{digits}} # {} \n".format(
-                        "gas", ", ".join(solvents), digits=40 - len("solvent")
-                    )
-                )
-            inp.write(
-                "prog: {:{digits}} # tm, orca\n".format(
-                    str(args.prog), digits=40 - len("prog")
-                )
-            )
-            inp.write(
-                "ancopt: {:{digits}} # on, off\n".format(
-                    str(args.ancopt), digits=40 - len("ancopt")
-                )
-            )
-            if args.rrhoprog:
-                inp.write(
-                    "prog_rrho: {:{digits}} # xtb, prog\n".format(
-                        str(args.rrhoprog), digits=40 - len("prog_rrho")
-                    )
-                )
-            else:
-                inp.write(
-                    "prog_rrho: {:{digits}} # xtb, prog\n".format(
-                        "prog", digits=40 - len("prog_rrho")
-                    )
-                )
-            inp.write(
-                "gfn_version: {:{digits}} # {}\n".format(
-                    str(args.gfnv), ", ".join(gfnv), digits=40 - len("gfn_version")
-                )
-            )
-            if args.temperature:
-                inp.write(
-                    "temperature: {:{digits}} # in Kelvin\n".format(
-                        str(args.temperature), digits=40 - len("temperature")
-                    )
-                )
-            else:
-                inp.write(
-                    "temperature: {:{digits}} # in Kelvin\n".format(
-                        self.enso_internal_defaults["temperature"],
-                        digits=40 - len("temperature"),
-                    )
-                )
-            if args.prog3:
-                inp.write(
-                    "prog3: {:{digits}} # tm, orca, prog\n".format(
-                        str(args.prog3), digits=40 - len("prog3")
-                    )
-                )
-            else:
-                inp.write(
-                    "prog3: {:{digits}} # tm, orca, prog\n".format(
-                        "prog", digits=40 - len("prog3")
-                    )
-                )
-            if args.prog4:
-                inp.write(
-                    "prog4: {:{digits}} # prog, tm, orca\n".format(
-                        str(args.prog4), digits=40 - len("prog4")
-                    )
-                )
-            else:
-                inp.write(
-                    "prog4: {:{digits}} # tm, orca\n".format(
-                        "prog", digits=40 - len("prog4")
-                    )
-                )
-            inp.write(
-                "part1: {:{digits}} # on, off\n".format(
-                    str(args.part1), digits=40 - len("part1")
-                )
-            )
-            inp.write(
-                "part2: {:{digits}} # on, off\n".format(
-                    str(args.part2), digits=40 - len("part2")
-                )
-            )
-            inp.write(
-                "part3: {:{digits}} # on, off\n".format(
-                    str(args.part3), digits=40 - len("part3")
-                )
-            )
-            inp.write(
-                "part4: {:{digits}} # on, off\n".format(
-                    str(args.part4), digits=40 - len("part4")
-                )
-            )
-            if args.boltzmann == "on":
-                inp.write(
-                    "boltzmann: {:{digits}} # on, off\n".format(
-                        "on", digits=40 - len("boltzmann")
-                    )
-                )
-            elif args.boltzmann == "off" or not args.boltzmann:
-                inp.write(
-                    "boltzmann: {:{digits}} # on, off\n".format(
-                        "off", digits=40 - len("boltzmann")
-                    )
-                )
-            if args.backup == "on":
-                inp.write(
-                    "backup: {:{digits}} # on, off\n".format(
-                        "on", digits=40 - len("backup")
-                    )
-                )
-            elif args.backup == "off" or not args.backup:
-                inp.write(
-                    "backup: {:{digits}} # on, off\n".format(
-                        "off", digits=40 - len("backup")
-                    )
-                )
-            inp.write(
-                "func: {:{digits}} # {} \n".format(
-                    str(args.func), ", ".join(func), digits=40 - len("func")
-                )
-            )
-            inp.write(
-                "func3: {:{digits}} # {} \n".format(
-                    str(args.func3), ", ".join(func3), digits=40 - len("func3")
-                )
-            )
-            inp.write(
-                "basis3: {:{digits}} #  \n".format(
-                    str(args.basis3), digits=40 - len("basis3")
-                )
-            )
-            inp.write(
-                "couplings: {:{digits}} # on, off\n".format(
-                    str(args.calcJ), digits=40 - len("couplings")
-                )
-            )
-            inp.write(
-                "funcJ: {:{digits}} # {} \n".format(
-                    str(args.funcJ), ", ".join(funcJ), digits=40 - len("funcJ")
-                )
-            )
-            inp.write(
-                "basisJ: {:{digits}} #  \n".format(
-                    str(args.basisJ), digits=40 - len("basisJ")
-                )
-            )
-            inp.write(
-                "shieldings: {:{digits}} # on, off\n".format(
-                    str(args.calcS), digits=40 - len("shieldings")
-                )
-            )
-            inp.write(
-                "funcS: {:{digits}} # {} \n".format(
-                    str(args.funcS), ", ".join(funcS), digits=40 - len("funcS")
-                )
-            )
-            inp.write(
-                "basisS: {:{digits}} # \n".format(
-                    str(args.basisS), digits=40 - len("basisS")
-                )
-            )
-            inp.write(
-                "part1_threshold: {:{digits}} # integer or real number\n".format(
-                    str(args.thr1), digits=40 - len("part1_threshold")
-                )
-            )
-            inp.write(
-                "part2_threshold: {:{digits}} # integer or real number\n".format(
-                    str(args.thr2), digits=40 - len("part2_threshold")
-                )
-            )
-            if args.sm:
-                inp.write(
-                    "sm: {:{digits}} # cosmo, dcosmors, cpcm, smd\n".format(
-                        str(args.sm), digits=40 - len("sm")
-                    )
-                )
-            else:
-                inp.write(
-                    "sm: {:{digits}} # cosmo, dcosmors, cpcm, smd\n".format(
-                        "default", digits=40 - len("sm")
-                    )
-                )
-            if args.gsolv2:
-                inp.write(
-                    "smgsolv2: {:{digits}} # sm, cosmors\n".format(
-                        str(args.gsolv2), digits=40 - len("smgsolv2")
-                    )
-                )
-            else:
-                inp.write(
-                    "smgsolv2: {:{digits}} # sm, cosmors\n".format(
-                        "sm", digits=40 - len("smgsolv2")
-                    )
-                )
-            if args.sm3:
-                inp.write(
-                    "sm3: {:{digits}} # dcosmors, cosmors, smd\n".format(
-                        str(args.sm3), digits=40 - len("sm3")
-                    )
-                )
-            else:
-                inp.write(
-                    "sm3: {:{digits}} # cosmors, smd\n".format(
-                        "default", digits=40 - len("sm3")
-                    )
-                )
-            if args.sm4:
-                inp.write(
-                    "sm4: {:{digits}} # cosmo, cpcm, smd\n".format(
-                        str(args.sm4), digits=40 - len("sm4")
-                    )
-                )
-            else:
-                inp.write(
-                    "sm4: {:{digits}} # cosmo, cpcm, smd\n".format(
-                        "default", digits=40 - len("sm4")
-                    )
-                )
-            if args.check == "on":
-                inp.write(
-                    "check: {:{digits}} # on, off\n".format(
-                        "on", digits=40 - len("check")
-                    )
-                )
-            elif args.check == "off":
-                inp.write(
-                    "check: {:{digits}} # on, off\n".format(
-                        "off", digits=40 - len("check")
-                    )
-                )
-            if args.crestcheck == "on":
-                inp.write(
-                    "crestcheck: {:{digits}} # on, off\n".format(
-                        "on", digits=40 - len("crestcheck")
-                    )
-                )
-            elif args.crestcheck == "off":
-                inp.write(
-                    "crestcheck: {:{digits}} # on, off\n".format(
-                        "off", digits=40 - len("crestcheck")
-                    )
-                )
-            inp.write(
-                "maxthreads: {:{digits}} # integer larger than 0\n".format(
-                    str(args.maxthreads), digits=40 - len("maxthreads")
-                )
-            )
-            inp.write(
-                "omp: {:{digits}} # integer larger than 0\n".format(
-                    str(args.omp), digits=40 - len("omp")
-                )
-            )
-            inp.write(
-                "reference for 1H: {:{digits}} # {}\n".format(
-                    str(args.href), ", ".join(href), digits=40 - len("reference for 1H")
-                )
-            )
-            inp.write(
-                "reference for 13C: {:{digits}} # {}\n".format(
-                    str(args.cref),
-                    ", ".join(cref),
-                    digits=40 - len("reference for 13C"),
-                )
-            )
-            inp.write(
-                "reference for 19F: {:{digits}} # {}\n".format(
-                    str(args.fref),
-                    ", ".join(fref),
-                    digits=40 - len("reference for 19F"),
-                )
-            )
-            inp.write(
-                "reference for 31P: {:{digits}} # {}\n".format(
-                    str(args.pref),
-                    ", ".join(pref),
-                    digits=40 - len("reference for 31P"),
-                )
-            )
-            inp.write(
-                "reference for 29Si: {:{digits}} # {}\n".format(
-                    str(args.siref),
-                    ", ".join(siref),
-                    digits=40 - len("reference for 29Si"),
-                )
-            )
-            inp.write(
-                "1H active: {:{digits}} # on, off\n".format(
-                    str(args.hactive), digits=40 - len("1H active")
-                )
-            )
-            inp.write(
-                "13C active: {:{digits}} # on, off\n".format(
-                    str(args.cactive), digits=40 - len("13C active")
-                )
-            )
-            inp.write(
-                "19F active: {:{digits}} # on, off\n".format(
-                    str(args.factive), digits=40 - len("19F active")
-                )
-            )
-            inp.write(
-                "31P active: {:{digits}} # on, off\n".format(
-                    str(args.pactive), digits=40 - len("31P active")
-                )
-            )
-            inp.write(
-                "29Si active: {:{digits}} # on, off\n".format(
-                    str(args.siactive), digits=40 - len("29Si active")
-                )
-            )
-            inp.write(
-                "resonance frequency: {:{digits}} # integer\n".format(
-                    str(args.mf), digits=40 - len("resonance frequency")
-                )
-            )
-            inp.write("end\n")
-        return
-
-    def read_flags(
-        self,
-        args,
-        solvents,
-        gfnv,
-        func,
-        func3,
-        funcJ,
-        funcS,
-        href,
-        cref,
-        fref,
-        pref,
-        siref,
-        path,
-        startread,
-    ):
-        """Read and check flags.dat"""
-        print("\nReading information from flags.dat.")
-        self._read_config(path, startread)
-        error_logical = (
-            False
-        )  # is set true if error occurs and program has to be aborted
-        if "end" in self.configdata:
-            del self.configdata["end"]
-        readinkeys = []
-        for item in self.configdata:
-            if item not in self.known_keys:
-                print("WARNING: {} is not a known keyword in flags.dat.".format(item))
-            else:
-                readinkeys.append(item)
-        diff = list(set(self.known_keys) - set(readinkeys))
-        if diff:
-            print(
-                "WARNING: These keywords were not found in the configuration "
-                "file flags.dat\n         and therefore default "
-                "values are taken for:"
-            )
-            for item in diff:
-                print("         {}".format(item))
-                self.configdata[item] = self.enso_internal_defaults[item]
-        if "part1" in self.configdata:
-            if self.configdata["part1"] in ["on", "off"]:
-                args.part1 = self.configdata["part1"]
-            else:
-                print(
-                    "\nERROR: Part 1 is not recognized! Options are {}.".format(
-                        self.value_options["part1"]
-                    )
-                )
-                error_logical = True
-        if "part2" in self.configdata:
-            if self.configdata["part2"] in ["on", "off"]:
-                args.part2 = self.configdata["part2"]
-            else:
-                print(
-                    "\nERROR: Part 2 is not recognized! Options are {}.".format(
-                        self.value_options["part2"]
-                    )
-                )
-                error_logical = True
-        if "part3" in self.configdata:
-            if self.configdata["part3"] in ["on", "off"]:
-                args.part3 = self.configdata["part3"]
-            else:
-                print(
-                    "\nERROR: Part 3 is not recognized! Options are {}.".format(
-                        self.value_options["part3"]
-                    )
-                )
-                error_logical = True
-        if "part4" in self.configdata:
-            if self.configdata["part4"] in ["on", "off"]:
-                args.part4 = self.configdata["part4"]
-            else:
-                print(
-                    "\nERROR: Part 4 is not recognized! Options are {}.".format(
-                        self.value_options["part4"]
-                    )
-                )
-                error_logical = True
-        if "nconf" in self.configdata:
-            if self.configdata["nconf"] == "all":
-                args.nstruc = None
-            else:
-                try:
-                    args.nstruc = int(self.configdata["nconf"])
-                except ValueError:
-                    if args.part1 == "on":
-                        print(
-                            "\nERROR: Can not convert number of conformers "
-                            "(nconf)! Number of conformers has to be "
-                            "an integer or set to all."
-                        )
-                        error_logical = True
-        if "charge" in self.configdata:
-            try:
-                args.chrg = int(self.configdata["charge"])
-            except ValueError:
-                print(
-                    "\nERROR: Can not read the charge information! Charge has to"
-                    " be an integer."
-                )
-                error_logical = True
-        if "unpaired" in self.configdata:
-            try:
-                args.unpaired = int(self.configdata["unpaired"])
-            except ValueError:
-                print(
-                    "\nERROR: Can not convert number of unpaired electrons! Number "
-                    "of unpaired electrons has to be an integer."
-                )
-                error_logical = True
-        if "solvent" in self.configdata:
-            if self.configdata["solvent"] == "gas":
-                args.solv = None
-            elif self.configdata["solvent"] in solvents:
-                args.solv = self.configdata["solvent"]
-            else:
-                print(
-                    '\nERROR: Solvent "{}" is not implemented! Options are {}.'.format(
-                        self.configdata["solvent"], self.value_options["solvent"]
-                    )
-                )
-                error_logical = True
-        if "prog" in self.configdata:
-            if self.configdata["prog"] in ["tm", "orca"]:
-                args.prog = self.configdata["prog"]
-            else:
-                print(
-                    "\nERROR: Prog is not recognized! Options for the main "
-                    "program are ORCA (orca) or TURBOMOLE (tm)."
-                )
-                error_logical = True
-        if "prog3" in self.configdata:
-            if self.configdata["prog3"] in ["tm", "orca"]:
-                args.prog3 = self.configdata["prog3"]
-            elif self.configdata["prog3"] == "prog":
-                args.prog3 = args.prog
-            else:
-                print(
-                    "\nERROR: Prog3 is not recognized! Options for the main "
-                    "program are ORCA (orca) or TURBOMOLE (tm)."
-                )
-                error_logical = True
-        if "prog4" in self.configdata:
-            if self.configdata["prog4"] in ["tm", "orca"]:
-                args.prog4 = self.configdata["prog4"]
-            elif self.configdata["prog4"] == "prog":
-                args.prog4 = args.prog
-            else:
-                if args.part4 == "on":
-                    print(
-                        "\nERROR: Program for part 4 is not recognized! Options "
-                        "are ORCA (orca), TURBOMOLE (tm), "
-                        "or the main program (prog)."
-                    )
-                    error_logical = True
-                else:
-                    print(
-                        "\nWARNING: Program for part 4 is not recognized! Options "
-                        "are ORCA (orca), TURBOMOLE (tm), "
-                        "or the main program (prog)."
-                    )
-        if "ancopt" in self.configdata:
-            if self.configdata["ancopt"] in ["on", "off"]:
-                args.ancopt = self.configdata["ancopt"]
-            else:
-                print(
-                    "\nWARNING: The use of the ANCOPT-optimizer implemented in "
-                    "GFN-xTB is not recognized! Options are on or off."
-                )
-                error_logical = True
-        if "prog_rrho" in self.configdata:
-            if self.configdata["prog_rrho"] == "xtb":
-                args.rrhoprog = self.configdata["prog_rrho"]
-            elif self.configdata["prog_rrho"] == "off":
-                args.rrhoprog = self.configdata["prog_rrho"]
-                print(
-                    "WARNING: Thermostatistical contribution to free energy will"
-                    "not be calculated!"
-                )
-            elif (
-                self.configdata["prog_rrho"] in ["prog", "orca"] and args.prog == "orca"
-            ):
-                args.rrhoprog = "orca"
-            elif self.configdata["prog_rrho"] in ["prog", "tm"] and args.prog == "tm":
+    def check_logic(self, args, error_logical, silent):
+        """Has to be run after reading flags"""
+        information = []
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle resonance frequency:
+        if args.mf is None:
+            information.append("\nWARNING: Can not convert resonance frequency! "
+                "Flag -mf has to be set while executing the "
+                "anmr program.")
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle prog3:
+        if args.prog3 == 'prog' and args.prog in self.value_options["prog"]:
+            args.prog3 = args.prog
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle prog4:
+        if args.prog4 == 'prog' and args.prog in self.value_options["prog"]:
+            args.prog4 = args.prog
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle boltzmann:
+        if args.boltzmann:
+            args.part1 = False
+            args.part2 = False
+            args.part3 = True
+            args.part4 = False
+            information.append("\nReminder: Only Boltzmann evaluation!")
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle backup:
+        if args.backup:
+            args.part1 = False
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle prog_rrho
+        if args.rrhoprog == 'prog' and args.prog in self.value_options["prog"]:
+            args.rrhoprog = args.prog
+            if args.rrhoprog == "tm":
                 if shutil.which("thermo") is not None:
-                    print("Found thermo, therefore tm hessian calculation allowed!")
+                    # need thermo for reading thermostatistical contribution
                     args.rrhoprog = "tm"
                 else:
                     args.rrhoprog = "xtb"
-                    print(
-                        "WARNING: Currently are only GFN-xTB hessians possible "
-                        "and no TM hessians"
-                    )
+                    information.append("WARNING: Currently are only GFNn-xTB "
+                    "hessians possible and no TM hessians")
+        elif args.rrhoprog =='off':
+            information.append("WARNING: Thermostatistical contribution to "
+            "free energy will not be calculated, since prog_rrho ist set to 'off'!")
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle basisJ
+        if args.basisJ == "default":
+            args.basisJ = self.enso_internal_defaults["basisJ"]
+            # different options for TM ORCA possible:
+            # eg. def2-TZVP or pcJ-0 
+            if args.prog4 == "tm":
+                args.basisJ = "def2-TZVP" # ensointernal_tm defaults
+            elif args.prog4 == 'orca':
+                args.basisJ = "pcJ-0" # ensointernal_orca defaults
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle basisS
+        if args.basisS == "default":
+            args.basisS = self.enso_internal_defaults["basisS"]
+            # different options for TM ORCA possible:
+            # eg. def2-TZVP or pcSseg-2
+            if args.prog4 == "tm":
+                args.basisS = "def2-TZVP" # ensointernal_tm defaults
+            elif args.prog4 == 'orca':
+                args.basisS = "pcSseg-2" # ensointernal_orca defaults
+
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle basis3
+        if args.basis3 == "default":
+            args.basis3 = self.enso_internal_defaults["basis3"]
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle func3 dsd-blyp with basis
+        if args.part3 and args.func3 == 'dsd-blyp' and args.basis3 != 'def2-TZVPP':
+            information.append("WARNING: DSD-BLYP is only available with the "
+            "basis set def2-TZVPP!")
+            args.basis3 = 'def2-TZVPP'
+
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle active nmrelement # 1H 13C ...
+        for key in self.exnmractive.keys():
+            if getattr(args, self.key_args_dict[key]):
+                self.spectrumlist.append(self.exnmractive[key])
+        # remove duplicates from spectrumlist if function is called twice
+        self.spectrumlist = list(set(self.spectrumlist))
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         # Handle func
+        if args.prog == 'orca' and args.func not in self.func_orca:
+            information.append("\nERROR: In part1 and part2 the functional "
+            "(func) {} is not implemented in ENSO with the {} program package."
+            " Options are: {}".format(args.func, 
+            args.prog, self.func_orca))
+            if not (args.part1 and args.part2): # if optimization is off
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Program for RRHO contribution in part 2 and 3 "
-                    "(rrhoprog) is not recognized!\n       Options are "
-                    "GFN-xTB (xtb) or the main program (prog)."
-                )
                 error_logical = True
-        if "gfn_version" in self.configdata:
-            if self.configdata["gfn_version"] in gfnv:
-                args.gfnv = self.configdata["gfn_version"]
+        if args.prog == 'tm' and args.func not in self.func_tm:
+            information.append("\nERROR: In part1 and part2 the functional "
+            "(func) {} is not implemented in ENSO with the {} program package. "
+            "Options are: {}".format(args.func, 
+            args.prog, self.func_tm))
+            if not (args.part1 and args.part2): # if optimization is off
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nWARNING: GFN-xTB version is not recognized! Options are "
-                    "{}.\nGFN2-xTB is used as default.".format(", ".join(gfnv))
-                )
-                args.gfnv = "gfn2"
-        if "temperature" in self.configdata:
-            try:
-                float(self.configdata["temperature"])
-                args.temperature = self.configdata["temperature"]
-            except ValueError:
-                print(
-                    "\nWARNING: Temperature {} could not be converted to a "
-                    "float! Using 298.15 K instead as default!".format(
-                        self.configdata["temperature"]
-                    )
-                )
-                args.temperature = "298.15"
-        if "boltzmann" in self.configdata:
-            if self.configdata["boltzmann"] == "off":
-                args.boltzmann = False
-            elif self.configdata["boltzmann"] == "on":
-                args.boltzmann = True
-                args.part1 = "off"
-                args.part2 = "off"
-                args.part3 = "on"
-                args.part4 = "off"
+                error_logical = True
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle func3
+        if args.prog3 == 'orca' and args.func3 not in self.func3_orca:
+            information.append("\nERROR: In part3 the functional (func3) {} "
+            "is not implemented in ENSO with  the {} program package. Options "
+            "are: {}".format(args.func3, 
+            args.prog3, self.func3_orca))
+            if not (args.part3):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Boltzmann is not recognized! Options are off for "
-                    "calculating everything or on for "
-                    "calculating only the boltzmann population in part3."
-                )
                 error_logical = True
-        if "backup" in self.configdata:
-            if self.configdata["backup"] == "off":
-                args.backup = False
-            elif self.configdata["backup"] == "on":
-                args.backup = True
-                args.part1 = "off"
+        if args.prog3 == 'tm' and args.func3 not in self.func3_tm:
+            information.append("\nERROR: In part3 the functional (func3) {} "
+            "is not implemented in ENSO with the {} program package. Options "
+            "are: {}".format(args.func3, 
+            args.prog3, self.func3_tm))
+            if not (args.part3):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Backup is not recognized! Options are off for the "
-                    "normal procedure or on for "
-                    "reevaluating the conformers sorted out."
-                )
                 error_logical = True
-        if "func" in self.configdata:
-            if self.configdata["func"] in func:
-                args.func = self.configdata["func"]
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle funcJ
+        if args.prog4 == 'orca' and args.funcJ not in self.funcJ_orca:
+            information.append("\nERROR: In part4 the functional (funcJ) {} "
+            "is not implemented in ENSO with the {} program package. Options "
+            "are: {}".format(args.funcJ, 
+            args.prog4, self.funcJ_orca))
+            if not (args.part4):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Chosen functional for part 1 and 2 (func) is not "
-                    "implemented! Options are {}.".format(", ".join(func))
-                )
                 error_logical = True
-        if "func3" in self.configdata:
-            if self.configdata["func3"] in func3:
-                args.func3 = self.configdata["func3"]
-                if args.prog3 == "tm" and args.func3 != "pw6b95":
-                    args.func3 = "pw6b95"
-                    print(
-                        "\nWARNING: Only PW6B95 is implemented as functional for"
-                        " part 3 for TM!"
-                    )
+        if args.prog4 == 'tm' and args.funcJ not in self.funcJ_tm:
+            information.append("\nERROR: In part4 the functional (funcJ) {} "
+            "is not implemented in ENSO with the {} program package. Options "
+            "are: {}".format(args.funcJ, 
+            args.prog4, self.funcJ_tm))
+            if not (args.part4):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Chosen functional for part 3 (func3) is not "
-                    "implemented! Options are {}.".format(", ".join(func3))
-                )
                 error_logical = True
-        if "basis3" in self.configdata:
-            try:
-                args.basis3 = str(self.configdata["basis3"])
-                if args.basis3 not in self.knownbasissets3:
-                    print(
-                        "WARNING! Basis for part3: {} is used but could not be "
-                        "checked for correct input!".format(args.basis3)
-                    )
-            except:
-                print("\nERROR: Can not read in basis set for part 3 (basis3)!")
-                error_logical = True
-        if "couplings" in self.configdata:
-            if self.configdata["couplings"] in ["on", "off"]:
-                args.calcJ = self.configdata["couplings"]
+        if args.funcJ == 'pbeh-3c':
+            args.basisJ = "def2-mSVP"
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Handle funcS
+        if args.prog4 == 'orca' and args.funcS not in self.funcS_orca:
+            information.append("\nERROR: In part4 the functional (funcS) {}"
+            " is not implemented in ENSO with the {} program package. Options "
+            "are: {}".format(args.funcS, 
+            args.prog4, self.funcS_orca))
+            if not (args.part4):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    '\nERROR: Couplings is not recognized! Options are "on" or "off".'
-                )
                 error_logical = True
-        if "basisJ" in self.configdata:
-            try:
-                args.basisJ = str(self.configdata["basisJ"])
-            except:
-                print(
-                    "\nERROR: Can not read in basis set for coupling calculation (basisJ)!"
-                )
-                error_logical = True
-            if args.basisJ == "default":
-                args.basisJ = "def2-TZVP"
-            if args.basisJ not in self.knownbasissetsJ:
-                print(
-                    "WARNING! Basis for coupling calculation: {} is used but "
-                    "could not be checked for correct "
-                    "input!".format(args.basisJ)
-                )
-        if "funcJ" in self.configdata:
-            if self.configdata["funcJ"] in funcJ:
-                args.funcJ = self.configdata["funcJ"]
+        if args.prog4 == 'tm' and args.funcS not in self.funcS_tm:
+            information.append("\nERROR: In part4 the functional (funcS) {}"
+            " is not implemented in ENSO with the {} program package. Options "
+            "are: {}".format(args.funcS, 
+            args.prog4, self.funcS_tm))
+            if not (args.part4):
+                tmp = information.pop().replace("\nERROR", "WARNING", 1)
+                information.append(tmp)
             else:
-                print(
-                    "\nERROR: Chosen functional for coupling calculation (funcJ)"
-                    " is not implemented! Options are {}.".format(", ".join(funcJ))
-                )
                 error_logical = True
-            if self.configdata["funcJ"] == "pbeh-3c":
-                args.basisJ = "def2-mSVP"
-        if "shieldings" in self.configdata:
-            if self.configdata["shieldings"] in ["on", "off"]:
-                args.calcS = self.configdata["shieldings"]
+        if args.funcS == 'pbeh-3c':
+            args.basisS = "def2-mSVP"
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # no unpaired electrons in coupling or shiedling calculations!
+        if args.unpaired > 0:
+            if args.part4 and (args.calcJ or args.calcS):
+                information.append("ERROR: Coupling and shift calculations "
+                "(part4) are only available for closed-shell systems!")
+                error_logical = True
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        if args.solv in (None, 'gas'): # if in gas phase
+            args.sm = 'default' 
+            args.smgsolv2 = 'sm'
+            args.sm3 = 'default'
+            args.sm4 = 'default'
+        else:
+            # Handle sm
+            exchange_sm = {'cosmo': 'cpcm', 
+                        'cpcm': 'cosmo', 
+                        'dcosmors': 'smd', 
+                        'smd': 'dcosmors'}
+            if args.prog == 'orca':
+                if args.sm in self.sm_tm:
+                    information.append("WARNING: {} is not available with {}!"
+                    " Therefore {} is used!".format(args.sm, args.prog,
+                    exchange_sm[args.sm]))
+                    args.sm = exchange_sm[args.sm]
+                elif args.sm == "default":
+                    args.sm = self.enso_internal_defaults_orca["sm"]
+            if args.prog == 'tm':
+                if args.sm in self.sm_orca:
+                    information.append("WARNING: {} is not available with {}! "
+                    "Therefore {} is used!".format(args.sm, args.prog,
+                    exchange_sm[args.sm]))
+                    args.sm = exchange_sm[args.sm]
+                elif args.sm == "default":
+                    args.sm = self.enso_internal_defaults_tm["sm"]
+            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Handle sm3
+            if args.prog3 == 'orca':
+                if args.sm3 in self.sm3_tm:
+                    information.append("WARNING: {} is not available with {}! "
+                    "Therefore {} is used!".format(args.sm3, args.prog3, 
+                    exchange_sm[args.sm3]))
+                    args.sm3 = exchange_sm[args.sm3]
+                elif args.sm3 == "default":
+                    args.sm3 = self.enso_internal_defaults_orca["sm3"]
+            if args.prog3 == 'tm':
+                if args.sm3 in self.sm3_orca:
+                    information.append("WARNING: {} is not available with {}! "
+                    "Therefore {} is used!".format(args.sm3, args.prog3,
+                    exchange_sm[args.sm3]))
+                    args.sm3 = exchange_sm[args.sm3]
+                elif args.sm3 == "default":
+                    args.sm3 = self.enso_internal_defaults_tm["sm3"]
+            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Handle sm4
+            if args.prog4 == 'orca':
+                if args.sm4 in self.sm4_tm:
+                    information.append("WARNING: {} is not available with {}!"
+                    " Therefore {} is used!".format(args.sm4, args.prog4,
+                    exchange_sm[args.sm4]))
+                    args.sm4 = exchange_sm[args.sm4]
+                elif args.sm4 == "default":
+                    args.sm4 = self.enso_internal_defaults_orca["sm4"]
+            if args.prog4 == 'tm':
+                if args.sm4 in self.sm4_orca:
+                    information.append("WARNING: {} is not available with {}!"
+                    " Therefore {} is used!".format(args.sm4, args.prog4,
+                    exchange_sm[args.sm4]))
+                    args.sm4 = exchange_sm[args.sm4]
+                elif args.sm4 == "default":
+                    args.sm4 = self.enso_internal_defaults_tm["sm4"]
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        if args.part4  and not args.calcJ and not args.calcS:
+            args.part4 = False
+            information.append("WARNING: Neither calculating coupling nor "
+            "shielding constants is activated! Part 4 is not executed."
+            )
+        elif not self.spectrumlist:
+            if args.part4:
+                information.append("WARNING: No type of NMR spectrum is "
+                "activated in the .ensorc! Part 4 is not executed.")
+                args.part4 = False
             else:
-                print(
-                    '\nERROR: Shieldings is not recognized! Options are "on" or "off".'
+                information.append(
+                    "WARNING: No type of NMR spectrum is activated in "
+                    "the .ensorc!"
                 )
-                error_logical = True
-        if "basisS" in self.configdata:
-            try:
-                args.basisS = str(self.configdata["basisS"])
-            except:
-                print(
-                    "\nERROR: Can not read in basis set for shielding calculation (basisS)!"
-                )
-                error_logical = True
-            if args.basisS == "default":
-                args.basisS = "def2-TZVP"
-            if args.basisS not in self.knownbasissetsS:
-                print(
-                    "WARNING! Basis for shielding calculation: {} is used but could not be checked for correct "
-                    "input!".format(args.basisS)
-                )
-        if "funcS" in self.configdata:
-            if self.configdata["funcS"] in funcS:
-                args.funcS = self.configdata["funcS"]
-                if args.funcS == "dsd-blyp" and args.prog4 == "tm":
-                    print(
-                        "\nError: DSD-BLYP for shielding calculations is only "
-                        "possible with ORCA!"
-                    )
-                    error_logical = True
-            else:
-                print(
-                    "\nERROR: Chosen functional for shielding calculation (funcS)"
-                    " is not implemented! Options are {}.".format(", ".join(funcS))
-                )
-                error_logical = True
-                if args.debug:
-                    args.funcS = self.configdata["funcS"]
-            if self.configdata["funcS"] == "pbeh-3c":
-                args.basisS = "def2-mSVP"
-        if "part1_threshold" in self.configdata:
-            try:
-                args.thr1 = float(self.configdata["part1_threshold"])
-            except ValueError:
-                print(
-                    "\nERROR: Threshold for part 1 could not be converted! Threshold has to be number."
-                )
-                error_logical = True
-        if "part2_threshold" in self.configdata:
-            try:
-                args.thr2 = float(self.configdata["part2_threshold"])
-            except ValueError:
-                print(
-                    "\nERROR: Threshold for part 2 could not be converted! Threshold has to be number."
-                )
-                error_logical = True
-        if "sm" in self.configdata:
-            if args.prog == "tm" and self.configdata["sm"] in ("cosmo", "dcosmors"):
-                args.sm = self.configdata["sm"]
-            elif args.prog == "tm" and self.configdata["sm"] == "cpcm":
-                args.sm = "cosmo"
-                print(
-                    "WARNING: CPCM is not available with TM! COSMO is used instead as solvent model for part 1 and 2."
-                )
-            elif args.prog == "tm" and self.configdata["sm"] not in (
-                "cosmo",
-                "dcosmors",
-                "default",
-            ):
-                args.sm = "dcosmors"
-                print(
-                    "WARNING: Solvent model for part1 and 2 is not recognized! DCOSMO-RS is used as default with TM."
-                )
-            elif args.prog == "orca" and self.configdata["sm"] in ("cpcm", "smd"):
-                args.sm = self.configdata["sm"]
-            elif args.prog == "orca" and self.configdata["sm"] == "cosmo":
-                args.sm = "cpcm"
-                print(
-                    "WARNING: COSMO is not available with ORCA! CPCM is used instead as solvent model for part 1 and 2."
-                )
-            elif args.prog == "orca" and self.configdata["sm"] not in (
-                "cpcm",
-                "smd",
-                "default",
-            ):
-                args.sm = "smd"
-                print(
-                    "WARNING: Solvent model for part1 and 2 is not recognized! SMD is used as default with ORCA."
-                )
-            elif self.configdata["sm"] == "default":
-                if args.prog == "tm":
-                    args.sm = "dcosmors"
-                elif args.prog == "orca":
-                    args.sm = "smd"
-        if "smgsolv2" in self.configdata:
-            if self.configdata["smgsolv2"] in ("cosmors", "sm", "gbsa_gsolv"):
-                args.gsolv2 = self.configdata["smgsolv2"]
-            else:
-                args.gsolv2 = args.sm
-                print(
-                    "WARNING: Solvent model for gsolv contribution of part 2 is "
-                    "not recognized! The same solvent "
-                    "model as for the optimizations in part 2 is used: {}.".format(
-                        args.gsolv2
-                    )
-                )
-        if "sm3" in self.configdata:
-            if args.solv is None:
-                args.sm3 = None
-            elif args.prog3 == "orca":
-                if self.configdata["sm3"] in ("cosmors", "smd", "gbsa_gsolv"):
-                    args.sm3 = self.configdata["sm3"]
-                elif self.configdata["sm3"] == "default":
-                    args.sm3 = "smd"
+        if not silent:
+            for line in information:
+                print(line)
+        return error_logical
+
+    def write_flags(self,args):
+        """ Write file "flags.dat" which is the control file for the calculation"""
+        with open(os.path.join(os.getcwd(), "flags.dat"), "w", newline=None) as inp:
+            inp.write("FLAGS\n")
+            exchange = {True: 'on', False: 'off'}
+            for flag in self.known_keys:
+                if getattr(args, self.key_args_dict[flag], 'notfound') != 'notfound':
+                    value = getattr(args, self.key_args_dict[flag], None)
                 else:
-                    args.sm3 = "smd"
-                    print(
-                        "WARNING: Solvent model for part 3 is not recognized! Options are SMD (smd) or COSMO-RS "
-                        "(cosmors) for ORCA. Solvent model for part 3 is set to SMD."
-                    )
-            elif args.prog3 == "tm":
-                if self.configdata["sm3"] in ("cosmors", "dcosmors", "gbsa_gsolv"):
-                    args.sm3 = self.configdata["sm3"]
-                elif self.configdata["sm3"] == "default":
-                    args.sm3 = "dcosmors"
+                    value =  self.enso_internal_defaults[flag]
+                if value is True or value is False:
+                    value = exchange[value]
+                if flag == 'nconf' and value is None:
+                    value = 'all'
+                if flag == 'prog_rrho' and value in ('orca', 'tm'):
+                    value = 'prog'
+                if 'basis' in flag:
+                    options = 'several basis sets, see docs'
                 else:
-                    args.sm3 = "dcosmors"
-                    print(
-                        "WARNING: solvent model for part 3 is not recognized! Options are DCOSMO-RS (dcosmors) "
-                        "or COSMO-RS (cosmors) for TM. Solvent model for part 3 is set to DCOSMO-RS."
+                    options = ", ".join(str(i) for i in self.value_options.get(flag, "options"))
+                inp.write(
+                    "{}: {:{digits}} # {}\n".format(
+                    str(flag),
+                    str(value),
+                    options,
+                    digits=40 - len(str(flag))
                     )
-        if "sm4" in self.configdata:
-            if args.solv is None:
-                args.sm4 = None
-            elif args.prog4 == "tm":
-                if self.configdata["sm4"] in ("dcosmors", "cosmo"):
-                    args.sm4 = self.configdata["sm4"]
-                elif self.configdata["sm4"] == "default":
-                    args.sm4 = "dcosmors"
+                )
+            inp.write("end\n")
+        return
+
+    def process_flags(self,args,path,startread,silent):
+        """Read and check the file flags.dat"""
+        self._read_config(path, startread, args) # data from either ensorc + cml or flags.dat
+        information = []
+        error_logical = False
+        # check flags which can be assigned if they are in self.value_options:
+        tocheck = [
+                   "part1",
+                   "part2",
+                   "part3",
+                   "part4",
+                   "prog",
+                   "prog3",
+                   "prog4",
+                   "solvent",
+                   "ancopt",
+                   "prog_rrho",
+                   "gfn_version",
+                   "boltzmann",
+                   "backup",
+                   "func",
+                   "func3",
+                   "basis3",
+                   "basisJ",
+                   "basisS",
+                   "check",
+                   "crestcheck",
+                   "1H active",
+                   "13C active",
+                   "19F active",
+                   "31P active",
+                   "29Si active",
+                   "reference for 1H",
+                   "reference for 13C",
+                   "reference for 19F",
+                   "reference for 29Si",
+                   "reference for 31P",
+                   "couplings",
+                   "shieldings",
+                   "funcJ",
+                   "funcS",
+                   "sm",
+                   "smgsolv2",
+                   "sm3",
+                   "sm4",
+                   ]
+        no_error = ["reference for 1H",
+                   "reference for 13C",
+                   "reference for 19F",
+                   "reference for 29Si",
+                   "reference for 31P",
+                    ]
+        for flag in tocheck:
+            if flag in self.configdata:
+                if 'basis' in flag:
+                    if self.configdata[flag] not in self.value_options[flag]:
+                        information.append("WARNING! Basis for {}: {} is used but could not be "
+                        "checked for correct input!".format(flag, self.configdata[flag]))
+                    setattr(args, self.key_args_dict[flag], self.configdata[flag])
+                elif flag == 'prog' and os.path.basename(path) == '.ensorc':
+                # exception for ensorc prog can be None to decide later on
+                    if self.configdata[flag] in self.value_options[flag] + [None]:
+                        setattr(args, self.key_args_dict[flag], self.configdata[flag])
+                    else: 
+                        setattr(args, self.key_args_dict[flag], None)
                 else:
-                    args.sm4 = "dcosmors"
-                    print(
-                        "WARNING: solvent model for part 4 is not recognized! Options are DCOSMO-RS (dcosmors) "
-                        "or COSMO for TM. Solvent model for part 4 is set to DCOSMO-RS."
-                    )
-            elif args.prog4 == "orca":
-                if self.configdata["sm4"] in ("smd", "cpcm"):
-                    args.sm4 = self.configdata["sm4"]
-                elif self.configdata["sm4"] == "default":
-                    args.sm4 = "smd"
+                    if self.configdata[flag] in self.value_options[flag]:
+                        if self.configdata[flag] in ('on', 'off'):
+                            if self.configdata[flag] == 'on':
+                                tmp_assign = True
+                            elif self.configdata[flag] == 'off':
+                                tmp_assign = False
+                        else:
+                            tmp_assign = self.configdata[flag]
+                        setattr(args, self.key_args_dict[flag], tmp_assign)
+                    else:
+                        information.append("\nERROR: {} is not recognized! Options are {}.".format(
+                        str(flag),
+                        self.value_options[flag]))
+                        if flag not in no_error:
+                            error_logical = True 
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+        # check with int / float conversion
+        numcheck = [
+                    "nconf",
+                    "charge",
+                    "unpaired",
+                    "temperature",
+                    "resonance frequency",
+                    "maxthreads",
+                    "omp",
+                    "part1_threshold",
+                    "part2_threshold",
+                   ]
+        numcheck_options = {"nconf": 'int',
+                            "charge": 'int',
+                            "unpaired": 'int',
+                            "temperature": 'float',
+                            "resonance frequency": 'float',
+                            "maxthreads": "int",
+                            "omp": "int",
+                            "part1_threshold": "float",
+                            "part2_threshold": "float",
+                           }
+        no_error.append("resonance frequency")
+        for flag in numcheck:
+            if flag in self.configdata:
+                if flag == 'nconf' and self.configdata[flag] == 'all':
+                    setattr(args, self.key_args_dict[flag], None)
                 else:
-                    args.sm4 = "smd"
-                    print(
-                        "WARNING: Solvent model for part 4 is not recognized! Options are SMD (smd) or CPCM "
-                        "for ORCA. Solvent model for part 4 is set to SMD."
-                    )
-        if "check" in self.configdata:
-            if self.configdata["check"] == "on":
-                args.check = True
-            elif self.configdata["check"] == "off":
-                args.check = False
-            else:
-                print(
-                    "WARNING: Chosen option for cautious searching for errors and exiting if too many errors occur ("
-                    "check) is not recognized! Options are on or off. Going to switch it off."
-                )
-                args.check = False
-        if "crestcheck" in self.configdata:
-            if self.configdata["crestcheck"] == "on":
-                args.crestcheck = True
-            elif self.configdata["crestcheck"] == "off":
-                args.crestcheck = False
-            else:
-                print(
-                    "WARNING: Chosen option for DFT-ensemble check using CREST is not recognized! Options are on or "
-                    "off. Going to switch it off."
-                )
-                args.crestcheck = False
-        if "maxthreads" in self.configdata:
-            try:
-                args.maxthreads = int(self.configdata["maxthreads"])
-            except ValueError:
-                print(
-                    "\nERROR: Can not convert maxthreads! Maxthreads has to be an integer."
-                )
-                error_logical = True
-        if "omp" in self.configdata:
-            try:
-                args.omp = int(self.configdata["omp"])
-            except ValueError:
-                print("\nERROR: Can not convert OMP! OMP has to be an integer.")
-                error_logical = True
-        spectrumlist = []
-        if "reference for 1H" in self.configdata:
-            if self.configdata["reference for 1H"] in href:
-                args.href = self.configdata["reference for 1H"]
-            else:
-                print(
-                    "\nWARNING: Reference for 1H is not implemented! Choices are {}. TMS is used.".format(
-                        ", ".join(href)
-                    )
-                )
-                args.href = "TMS"
-        if "reference for 13C" in self.configdata:
-            if self.configdata["reference for 13C"] in cref:
-                args.cref = self.configdata["reference for 13C"]
-            else:
-                print(
-                    "\nWARNING: Reference for 13C is not implemented! Choices are {}. TMS is used.".format(
-                        ", ".join(cref)
-                    )
-                )
-                args.cref = "TMS"
-        if "reference for 19F" in self.configdata:
-            if self.configdata["reference for 19F"] in fref:
-                args.fref = self.configdata["reference for 19F"]
-            elif self.configdata["reference for 19F"] == "default":
-                args.fref = "CFCl3"
-            else:
-                print(
-                    "\nWARNING: Reference for 19F is not implemented! Choices are {}. CFCl3 is used.".format(
-                        ", ".join(fref)
-                    )
-                )
-                args.fref = "CFCl3"
-        if "reference for 31P" in self.configdata:
-            if self.configdata["reference for 31P"] in pref:
-                args.pref = self.configdata["reference for 31P"]
-            elif self.configdata["reference for 31P"] == "default":
-                args.pref = "TMP"
-            else:
-                print(
-                    "\nWARNING: Reference for 31P is not implemented! Choices are {}. TMP is used.".format(
-                        ", ".join(pref)
-                    )
-                )
-                args.pref = "TMP"
-        if "reference for 29Si" in self.configdata:
-            if self.configdata["reference for 29Si"] in siref:
-                args.siref = self.configdata["reference for 29Si"]
-            else:
-                print(
-                    "\nWARNING: Reference for 29Si is not implemented! Choices are {}. TMS is used.".format(
-                        ", ".join(siref)
-                    )
-                )
-                args.siref = "TMS"
-        if "1H active" in self.configdata:
-            if self.configdata["1H active"] == "on":
-                args.hactive = self.configdata["1H active"]
-                spectrumlist.append("1H")
-            elif self.configdata["1H active"] == "off":
-                args.hactive = self.configdata["1H active"]
-            else:
-                args.hactive = "on"
-                spectrumlist.append("1H")
-                print(
-                    "\nWARNING: Can not read 1H active! Data for 1H NMR spectrum is calculated."
-                )
-        if "13C active" in self.configdata:
-            if self.configdata["13C active"] == "on":
-                args.cactive = self.configdata["13C active"]
-                spectrumlist.append("13C")
-            elif self.configdata["13C active"] == "off":
-                args.cactive = self.configdata["13C active"]
-            else:
-                args.cactive = "off"
-                print(
-                    "\nWARNING: Can not read 13C active! Data for 13C NMR spectrum is not calculated."
-                )
-        if "19F active" in self.configdata:
-            if self.configdata["19F active"] == "on":
-                args.factive = self.configdata["19F active"]
-                spectrumlist.append("19F")
-            elif self.configdata["19F active"] == "off":
-                args.factive = self.configdata["19F active"]
-            else:
-                args.factive = "off"
-                print(
-                    "\nWARNING: Can not read 19F active! Data for 19F NMR spectrum is not calculated."
-                )
-        if "31P active" in self.configdata:
-            if self.configdata["31P active"] == "on":
-                args.pactive = self.configdata["31P active"]
-                spectrumlist.append("31P")
-            elif self.configdata["31P active"] == "off":
-                args.pactive = self.configdata["31P active"]
-            else:
-                args.pactive = "off"
-                print(
-                    "\nWARNING: Can not read 31P active! Data for 31P NMR spectrum is not calculated."
-                )
-        if "29Si active" in self.configdata:
-            if self.configdata["29Si active"] == "on":
-                args.siactive = self.configdata["29Si active"]
-                spectrumlist.append("29Si")
-            elif self.configdata["29Si active"] == "off":
-                args.siactive = self.configdata["29Si active"]
-            else:
-                args.siactive = "off"
-                print(
-                    "\nWARNING: Can not read 31P active! Data for 31P NMR spectrum is not calculated."
-                )
-        if "resonance frequency" in self.configdata:
-            try:
-                args.mf = int(self.configdata["resonance frequency"])
-            except ValueError:
-                args.mf = None
-                print(
-                    "\nWARNING: Can not convert resonance frequency! Flag -mf has to be set while executing the "
-                    "anmr program."
-                )
-        if error_logical and not args.debug:
+                    try:
+                        if numcheck_options[flag] == 'int':
+                            tmp_assign = int(self.configdata[flag])
+                        elif numcheck_options[flag] == 'float':
+                            tmp_assign = float(self.configdata[flag])
+                        setattr(args, self.key_args_dict[flag], tmp_assign)
+                    except ValueError:
+                        information.append("\nERROR: Can not convert {}: '{}' into "
+                              "{}! Options are {}.".format(
+                              flag, self.configdata[flag],
+                              numcheck_options[flag], 
+                              self.value_options[flag]))
+                        if flag not in no_error:
+                            error_logical = True
+        if not silent:
+            for line in information:
+                print(line)
+        error_logical = self.check_logic(args, error_logical, silent)
+        if error_logical and not args.debug and not silent:
             print("Going to exit due to input errors!")
             sys.exit(1)
-        return spectrumlist
+        return error_logical
 
+    def processQMpaths(self, args, error_logical):
+        '''handle and print path at startup'''
+        needxtb = False
+        needcrest = True
+        needtm = False
+        needescf = False
+        needmpshift = False
+        needcefine = False
+        needcosmors = False
+        needorca = False
 
-def check_for_folder(conflist, functional, debug):
+        #Check which programs are needed for the current run:
+        # xTB
+        if args.rrhoprog == 'xtb' or args.ancopt or args.gsolv2 == 'gbsa_gsolv':
+            needxtb = True
+        # TM
+        if (
+            args.prog == "tm"
+            or args.prog3 == "tm"
+            or args.prog4 == "tm"
+            or args.gsolv2 == "cosmors"
+            or args.sm3 == "cosmors"
+        ):
+            needtm = True
+            needcefine = True
+        if args.part4 and args.prog4 == 'tm':
+            if args.calcJ:
+                needescf = True
+            if args.calcS:
+                needmpshift = True
+        #COSMORS
+        if (args.gsolv2 or args.sm3) == "cosmors":
+            needcosmors = True
+        # ORCA
+        if args.prog == "orca" or args.prog3 == "orca" or args.prog4 == "orca" or args.gsolv2 == 'smd_gsolv':
+            needorca = True
+
+        #print relevant Program paths:
+        print("\n-----------------------------------------------------------")
+        print(" PATHS of employed QM programs")
+        print("-----------------------------------------------------------\n")
+        print("The following program paths are used:")
+        if needorca:
+            print("    ORCA:         {}".format(self.orcapath))
+            print("    ORCA Version: {}".format(self.orcaversion))
+        if needxtb:
+            print("    xTB:          {}".format(self.xtbpath))
+        # always need CREST!
+        print("    CREST:        {}".format(self.crestpath))
+        if needtm:
+            tmpath = shutil.which('ridft')
+            print('    TURBOMOLE:    {}'.format(os.path.dirname(tmpath)))
+        if needescf:
+            print("    escf:         {}".format(self.escfpath))
+        if needmpshift:
+            print("    mpshift:      {}".format(self.mpshiftpath))
+        if needcosmors:
+            try:
+                tmp = self.cosmorssetup.split()
+                if len(tmp) == 9:
+                    print("    Set up of COSMO-RS:")
+                    print("        {}".format(" ".join(tmp[0:3])))
+                    print("        {}".format(" ".join(tmp[3:6])))
+                    print("        {}".format(" ".join(tmp[6:9])))
+                else:
+                    print("    Set up of COSMO-RS: {}".format(str(self.cosmorssetup)))
+            except:
+                print("    Set up of COSMO-RS: {}".format(str(self.cosmorssetup)))
+            print("    Using {}\n    as path to the COSMO-RS DATABASE.".format(self.dbpath))
+
+        # Check if paths of needed programs exist:
+        # always need CREST:
+        if self.crestpath is None or shutil.which(self.crestpath) is None:
+            print("\nERROR: path for CREST is not correct!")
+            error_logical = True
+        # xTB
+        if needxtb:
+            if self.xtbpath is None or shutil.which(self.xtbpath) is None:
+                print("\nERROR: path for xTB is not correct!")
+                error_logical = True
+            elif (args.rrhoprog == 'xtb' or args.gsolv2 == 'gbsa_gsolv') and args.gfnv == 'gfnff':
+                # make folder
+                mkdir_p('tmp')
+                # check if xtb version is over 6.3
+                s = subprocess.check_output(
+                    [self.xtbpath, '--version'],
+                    shell=False,
+                    stdin=None,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=False,
+                    cwd='tmp',)
+                output = s.decode("utf-8").splitlines()
+                for line in output:
+                    if '* xtb version' in line:
+                        #* xtb version 6.2.2 
+                        try:
+                            tmp = line.split()[3]
+                            tmp = tmp.split(".")
+                            tmp.insert(1, ".")
+                            xtbversion = float("".join(tmp))
+                        except:
+                            xtbversion = None
+                        break
+                # check version number
+                if xtbversion is not None and xtbversion < 6.3:
+                    print("\n    WARNING: The xtb version ({}) is below version 6.3 "
+                          "and GFN-FF is most probably not available!!!!".format(xtbversion))
+                # remove tmp folder
+                shutil.rmtree('tmp', ignore_errors=True)
+        # ORCA
+        if needorca:
+            if self.orcapath is None or shutil.which(os.path.join(self.orcapath, "orca")) is None:
+                print("\nERROR: path for ORCA is not correct!")
+                error_logical = True
+            if self.orca_old is None:
+                print("\nERROR: ORCA version was not found!")
+                error_logical = True
+        # cefine
+        if needcefine:
+            if shutil.which("cefine") is not None:
+                print("    Using cefine from {}".format(shutil.which("cefine")))
+            else:
+                print("\nERROR: cefine (the commandline program for define) has not been found!")
+                print("         all program needing TM can not start!")
+                error_logical = True
+        # TM
+        if needtm:
+            # preparation of parallel calculation with TM
+            try:
+                if self.environsettings["PARA_ARCH"] == "SMP":
+                    try:
+                        environsettings = os.environ 
+                        environsettings["PARNODES"] = str(args.omp)
+                        self.environsettings["PARNODES"] = str(args.omp)
+                        print(
+                            "    PARNODES for TM or COSMO-RS calculation was set "
+                            "to {}".format(self.environsettings["PARNODES"])
+                        )
+                    except:
+                        print("\nERROR: PARNODES can not be changed!")
+                        error_logical = True
+                else:
+                    print(
+                        "\nERROR: PARA_ARCH has to be set to SMP for parallel TM "
+                        "calculations!"
+                    )
+                    if args.run:
+                        error_logical = True
+            except:
+                print(
+                    "\nERROR: PARA_ARCH has to be set to SMP and PARNODES have to "
+                    "be set\n       for parallel TM calculations!."
+                )
+                if args.run:
+                    error_logical = True
+        if needescf:
+            if self.escfpath is None or shutil.which(self.escfpath) is None:
+                print("\nERROR: path for escf is not correct!")
+                error_logical = True
+        if needmpshift:
+            if self.mpshiftpath is None or shutil.which(self.mpshiftpath) is None:
+                print("\nERROR: path for mpshift is not correct!")
+                error_logical = True
+        # COSMORS
+        if needcosmors:
+            if self.cosmorssetup is None:
+                print("\nERROR: Set up for COSMO-RS has to be written to .ensorc!")
+                error_logical = True
+            if self.cosmothermversion is None:
+                print("\nERROR: Version of COSMO-RS has to be written to .ensorc!")
+                error_logical = True
+            if shutil.which("cosmotherm") is not None:
+                print("    Using COSMOtherm from {}".format(shutil.which("cosmotherm")))
+            else:
+                print("\nERROR: COSMOtherm has not been found!")
+                error_logical = True
+        print("END PATHS\n")
+        return error_logical
+
+    def print_parameters(self, args):
+        '''print settings at startup'''
+        # print parameter setting
+        print("\n-----------------------------------------------------------")
+        print(" PARAMETERS")
+        print("-----------------------------------------------------------\n")
+        parameterlist = []
+        parameterlist.append(['nat', "number of atoms in system", args.nat])
+        parameterlist.append(['nconf', "number of conformers", args.nconf])
+        parameterlist.append(['charge', "charge", args.chrg])
+        parameterlist.append(['unpaired',"unpaired", args.unpaired])
+        parameterlist.append(['solvent', "solvent", args.solv])
+        parameterlist.append(['prog', "program for part1 and part2", args.prog])
+        parameterlist.append(['prog3', "program for part3", args.prog3])
+        parameterlist.append(['prog4', "program for part4", args.prog4])
+        parameterlist.append(['ancopt', "using ANCOPT implemented in xTB for the optimization", args.ancopt])
+        parameterlist.append(['prog_rrho', "program for RRHO in part2 and part3", args.rrhoprog])
+        if args.rrhoprog == 'xtb' or args.gsolv2 == 'gbsa_gsolv':
+            parameterlist.append(["gfn_version", "GFN version for RRHO and/or GBSA_Gsolv in part2 and 3",args.gfnv])
+        parameterlist.append(["temperature", "temperature", args.temperature])
+        parameterlist.append(["part1", "part1", args.part1])
+        parameterlist.append(["part2", "part2", args.part2])
+        parameterlist.append(["part3", "part3", args.part3])
+        parameterlist.append(["part4", "part4", args.part4])
+        parameterlist.append(["boltzmann", "only boltzmann population", args.boltzmann])
+        parameterlist.append(["backup", "calculate backup conformers", args.backup])
+        parameterlist.append(["func", "functional for part1 and part2", args.func])
+        parameterlist.append(["func3", "functional for part3", args.func3])
+        parameterlist.append(["basis3", "basis set for part3", args.basis3])
+        parameterlist.append(["couplings", "calculate couplings", args.calcJ])
+        parameterlist.append(["funcJ", "functional for coupling calculation", args.funcJ])
+        parameterlist.append(["basisJ", "basis set for coupling calculation", args.basisJ])
+        parameterlist.append(["shieldings", "calculate shieldings", args.calcS])
+        parameterlist.append(["funcS", "functional for shielding calculation", args.funcS])
+        parameterlist.append(["basisS", "basis set for shielding calculation", args.basisS])
+        parameterlist.append(["part1_threshold", "threshold for part1", args.thr1])
+        parameterlist.append(["part2_threshold", "threshold for part2", args.thr2])
+        if args.solv not in ('gas', None):
+            parameterlist.append(["sm", "solvent model for part1 and part2", args.sm])
+            parameterlist.append(["smgsolv2", "solvent model for Gsolv contribution of part2", args.gsolv2])
+            parameterlist.append(["sm3", "solvent model for part3", args.sm3])
+            parameterlist.append(["sm4", "solvent model for part4", args.sm4])
+        parameterlist.append(["check","cautious checking for error and failed calculations", args.check])
+        parameterlist.append(["crestcheck", "checking the DFT-ensemble using CREST", args.crestcheck])
+        parameterlist.append(["maxthreads", "maxthreads", args.maxthreads])
+        parameterlist.append(["omp", "omp", args.omp])
+        if len(self.spectrumlist) > 0:
+            parameterlist.append(["justprint", "calculating spectra for: {:{digits}} {}".format(
+                                  "",(", ").join(self.spectrumlist),
+                                  digits=self.digilen - len("calculating spectra for"))])
+            if args.hactive:
+                parameterlist.append(["reference for 1H", "reference for 1H", args.href])
+            if args.cactive:
+                parameterlist.append(["reference for 13C", "reference for 13C", args.cref])
+            if args.factive:
+                parameterlist.append(["reference for 19F", "reference for 19F", args.fref])
+            if args.siactive:
+                parameterlist.append(["reference for 29Si", "reference for 29Si", args.siref])
+            if args.pactive:
+                parameterlist.append(["reference for 31P", "reference for 31P", args.pref])
+            parameterlist.append(["resonance frequency", "resonance frequency", args.mf])
+        optionsexchange = {True: 'on', False: 'off'}
+        for item in parameterlist:
+            if item[0] == 'justprint':
+                print(item[1:][0])
+            else:
+                option = getattr(args, self.key_args_dict.get(item[0], item[0]))
+                if option is True or option is False:
+                    tmpopt = optionsexchange[option]
+                else:
+                    tmpopt = option
+                if item[0] in ('sm', 'sm3', 'smgsolv2', 'sm4') and option is None:
+                    tmpopt = 'sm'
+                print("{}: {:{digits}} {}".format(
+                    item[1],
+                    "",
+                    tmpopt,
+                    digits=self.digilen-len(item[1])
+                    ))
+        print("END of parameters\n")
+
+def check_for_folder(conflist, foldername, debug, input_object):
     """Check if folders exist (of conformers calculated in previous run) """
     error_logical = False
     for i in conflist:
-        tmp_dir = os.path.join(i, args.func)
+        tmp_dir = os.path.join(i, foldername)
         if not os.path.exists(tmp_dir):
             print(
                 "ERROR: directory of conformer {} does not exist, although it was calculated before!".format(
@@ -8421,7 +8587,7 @@ def check_for_folder(conflist, functional, debug):
             error_logical = True
     if error_logical and not debug:
         print("One or multiple directories are missing.")
-        write_json("save_and_exit", json_dict, jsonfile)
+        input_object.write_json("save_and_exit")
     return
 
 
@@ -8433,7 +8599,7 @@ def new_folders(conflist, functional, save_errors):
             tmp_conf = conf
         else:
             tmp_conf = "CONF" + str(conf)
-        tmp_dir = [tmp_conf, os.path.join(tmp_conf, args.func)]
+        tmp_dir = [tmp_conf, os.path.join(tmp_conf, functional)]
         directories.append(tmp_dir)
         try:
             mkdir_p(tmp_dir[1])
@@ -8458,63 +8624,51 @@ def rrho_part23(
     in_part2,
     in_part3,
     results,
-    json_dict,
-    jsonfile,
+    input_object,
     save_errors,
-    digilen,
     cwd,
+    environsettings
 ):
     """calculate RRHO for part2 or part3"""
-
-    if in_part2:
-        pass
-    elif in_part3:
-        pass
-
     print("\nRRHO calculation:")
-    if args.solv and args.rrhoprog == "orca":
+    if args.solv not in (None, 'gas') and args.rrhoprog in ("orca", "tm"):
         print(
-            "WARNING: ORCA RRHO calculation with solvation correction is currently not "
-            "implemented! \nFor a RRHO contribution in solution, please use GFNn-xTB."
-            "\nRRHO is calculated in the gas phase.\n"
-        )
-    elif args.solv and args.rrhoprog == "tm":
-        print(
-            "WARNING: TM RRHO calculation with solvation correction is currently not "
-            "implemented! \nFor a RRHO contribution in solution, please use GFNn-xTB."
-            "\nRRHO is calculated in the gas phase.\n"
-        )
+        "WARNING: {} RRHO calculation with solvation correction is currently not "
+        "implemented! \nFor a RRHO contribution in solution, please use GFNn-xTB."
+        "\nRRHO is calculated in the gas phase.\n".format(str(args.rrhoprog).upper())
+    )
     tmp_results = []
     for conf in list(results):
-        if json_dict[conf.name]["rrho"] == "calculated":
+        if input_object.json_dict[conf.name]["rrho"] == "calculated":
             # this conformer was already calculated successfully,
             # append rrho energy and move it to tmp_results
-            conf.rrho = json_dict[conf.name]["energy_rrho"]
-            conf.symmetry = json_dict[conf.name]["symmetry"]
+            conf.rrho = input_object.json_dict[conf.name]["energy_rrho"]
+            conf.symmetry = input_object.json_dict[conf.name]["symmetry"]
             tmp_results.append(results.pop(results.index(conf)))
-        elif json_dict[conf.name]["rrho"] == "failed":
+        elif input_object.json_dict[conf.name]["rrho"] == "failed":
             # this conformer was already calculated,
             # but the calculation failed, remove it
             print(
-                "The RRHO calculation of part 2 failed for {} in the previous run."
+                "The RRHO calculation failed for {} in the previous run."
                 " The conformer is sorted out.".format(conf.name)
             )
             results.remove(conf)
-        elif json_dict[conf.name]["rrho"] == "not_calculated":
+        elif input_object.json_dict[conf.name]["rrho"] == "not_calculated":
             # this conformer has to be calculated now
             pass
     # check if there is at least one conformer
-    if len(tmp_results) == 0 and len(results) == 0:
+    if not tmp_results and not results:
         print("ERROR: There are no conformers left!")
-        write_json("save_and_exit", json_dict, jsonfile)
+        input_object.write_json("save_and_exit")
+
     print(
         "number of further considered conformers: {:{digits}} {}".format(
             "",
             str(len(results) + len(tmp_results)),
-            digits=digilen - len("number of further considered conformers"),
+            digits=input_object.digilen - len("number of further considered conformers"),
         )
     )
-    if len(tmp_results) > 0:
+    if tmp_results:
         print(
             "The RRHO calculation was already carried out for {} conformers:".format(
                 str(len(tmp_results))
@@ -8535,7 +8689,7 @@ def rrho_part23(
         print_block([i.name for i in results])
 
     # calculate RRHO for all conformers that remain in list results
-    if len(results) > 0:
+    if results:
         if args.rrhoprog == "xtb":
             # set omp num threads for GFN-xTB calculation
             # os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
@@ -8554,19 +8708,28 @@ def rrho_part23(
             except FileNotFoundError:
                 if not os.path.isfile(os.path.join(tmp_from, "coord")):
                     print(
-                        "ERROR: while copying the coord file from {}! The corresponding "
-                        "file does not exist.".format(tmp_from)
+                        "ERROR: while copying the coord file from {}! "
+                        "The corresponding file does not exist.".format(tmp_from)
                     )
                 elif not os.path.isdir(tmp_to):
                     print("ERROR: Could not create folder {}!".format(tmp_to))
                 print("ERROR: Removing conformer {}!".format(conf.name))
-                json_dict[conf.name]["rrho"] = "failed"
-                json_dict[conf.name]["energy_rrho"] = None
+                input_object.json_dict[conf.name]["rrho"] = "failed"
+                input_object.json_dict[conf.name]["energy_rrho"] = None
+                if args.rrhoprog == 'xtb':
+                    input_object.json_dict[conf.name]["rrho_xtb"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_xtb"] = None
+                elif args.rrhoprog == 'tm':
+                    input_object.json_dict[conf.name]["rrho_tm"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_tm"] = None
+                elif args.rrhoprog == 'orca':
+                    input_object.json_dict[conf.name]["rrho_orca"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_orca"] = None
                 if in_part2:
-                    json_dict[conf.name]["consider_for_part3"] = False
-                    json_dict[conf.name]["backup_part3"] = False
+                    input_object.json_dict[conf.name]["consider_for_part3"] = False
+                    input_object.json_dict[conf.name]["backup_part3"] = False
                 elif in_part3:
-                    json_dict[conf.name]["consider_for_part4"] = False
+                    input_object.json_dict[conf.name]["consider_for_part4"] = False
                 save_errors.append(
                     "Conformer {} was removed, because IO failed!".format(conf.name)
                 )
@@ -8574,9 +8737,9 @@ def rrho_part23(
         print("Constructed all new folders.")
 
         # check if at least one conformer is left
-        if len(results) == 0:
+        if not results:
             print("ERROR: No conformers left!")
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
 
         instructrrho = {
             "jobtype": "rrhoxtb",
@@ -8584,8 +8747,8 @@ def rrho_part23(
             "unpaired": args.unpaired,
             "func": args.func,
             "solv": args.solv,
-            "boltzmann": args.boltzmann,
             "temperature": args.temperature,
+            "environ": environsettings,
             "progsettings": {"omp": args.omp, "tempprogpath": ""},
         }
         if args.rrhoprog == "xtb":
@@ -8593,18 +8756,18 @@ def rrho_part23(
             instructrrho["func"] = "GFN-xTB"
             instructrrho["gfnv"] = args.gfnv
             instructrrho["progsettings"]["tempprogpath"] = ""
-            instructrrho["progsettings"]["xtbpath"] = xtbpath
+            instructrrho["progsettings"]["xtbpath"] = input_object.xtbpath
         elif args.rrhoprog == "orca":
             instructrrho["jobtype"] = "rrhoorca"
             instructrrho["func"] = args.func
-            instructrrho["progsettings"]["tempprogpath"] = orcapath
+            instructrrho["progsettings"]["tempprogpath"] = input_object.orcapath
         elif args.rrhoprog == "tm":
             instructrrho["jobtype"] = "rrhotm"
             instructrrho["func"] = args.func
             instructrrho["progsettings"]["tempprogpath"] = ""
 
         results = run_in_parallel(
-            q, resultq, job, maxthreads, results, instructrrho, "rrho"
+            q, resultq, job, int(args.maxthreads), results, instructrrho, "rrho"
         )
         exit_log, fail_rate = check_tasks(results, args)
 
@@ -8615,13 +8778,22 @@ def rrho_part23(
                     "\nERROR: A problem has occurred in the RRHO calculation of {}!"
                     " The conformer is removed.\n".format(conf.name)
                 )
-                json_dict[conf.name]["rrho"] = "failed"
-                json_dict[conf.name]["energy_rrho"] = None
+                input_object.json_dict[conf.name]["rrho"] = "failed"
+                input_object.json_dict[conf.name]["energy_rrho"] = None
+                if args.rrhoprog == 'xtb':
+                    input_object.json_dict[conf.name]["rrho_xtb"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_xtb"] = None
+                elif args.rrhoprog == 'tm':
+                    input_object.json_dict[conf.name]["rrho_tm"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_tm"] = None
+                elif args.rrhoprog == 'orca':
+                    input_object.json_dict[conf.name]["rrho_orca"] = "failed"
+                    input_object.json_dict[conf.name]["energy_rrho_orca"] = None
                 if in_part2:
-                    json_dict[conf.name]["consider_for_part3"] = False
-                    json_dict[conf.name]["backup_part3"] = False
+                    input_object.json_dict[conf.name]["consider_for_part3"] = False
+                    input_object.json_dict[conf.name]["backup_part3"] = False
                 elif in_part3:
-                    json_dict[conf.name]["consider_for_part4"] = False
+                    input_object.json_dict[conf.name]["consider_for_part4"] = False
                 save_errors.append(
                     "Conformer {} was removed, because the RRHO calculation "
                     "failed!".format(conf.name)
@@ -8629,9 +8801,18 @@ def rrho_part23(
                 results.remove(conf)
 
         for conf in results:
-            json_dict[conf.name]["rrho"] = "calculated"
-            json_dict[conf.name]["energy_rrho"] = conf.rrho
-            json_dict[conf.name]["symmetry"] = conf.symmetry
+            input_object.json_dict[conf.name]["rrho"] = "calculated"
+            input_object.json_dict[conf.name]["energy_rrho"] = conf.rrho
+            if args.rrhoprog == 'xtb':
+                input_object.json_dict[conf.name]["rrho_xtb"] = "calculated"
+                input_object.json_dict[conf.name]["energy_rrho_xtb"] = conf.rrho
+            elif args.rrhoprog == 'tm':
+                input_object.json_dict[conf.name]["rrho_tm"] = "calculated"
+                input_object.json_dict[conf.name]["energy_rrho_tm"] = conf.rrho
+            elif args.rrhoprog == 'orca':
+                input_object.json_dict[conf.name]["rrho_orca"] = "calculated"
+                input_object.json_dict[conf.name]["energy_rrho_orca"] = conf.rrho
+            input_object.json_dict[conf.name]["symmetry"] = conf.symmetry
 
         if exit_log:
             print(
@@ -8639,15 +8820,15 @@ def rrho_part23(
                     fail_rate
                 )
             )
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
 
-        if len(results) != 0 and args.rrhoprog == "xtb":
-            # check rmsd between GFN-xTB RRHO and DFT structure
+        if results and args.rrhoprog == "xtb":
+            # check rmsd between GFNn-xTB optimized geometry and DFT structure
             rmsd = []
             for item in results:
                 if item.rrho is not None:
                     workdir = str(os.path.join(cwd, os.path.join(item.name, "rrho")))
-                    rmsd.append([item.name, RMSD_routine(workdir, nat)])
+                    rmsd.append([item.name, RMSD_routine(workdir, int(args.nat))])
             for item in list(rmsd):
                 if not isinstance(item[1], float):
                     rmsd.remove(item)
@@ -8656,9 +8837,9 @@ def rrho_part23(
                     rmsd.remove(item)
             if len(rmsd) >= 1:
                 print(
-                    "\nWARNING: The RMSD between the DFT and the GFN-xTB structure "
+                    "\nWARNING: The RMSD between the DFT and the {}-xTB structure "
                     "used for the RRHO\n contribution is larger than 0.4 Angstrom for "
-                    "the following conformers:"
+                    "the following conformers:".format(str(args.gfnv).upper())
                 )
                 print("#CONF    RMSD\n")
                 for line in rmsd:
@@ -8669,25 +8850,22 @@ def rrho_part23(
                             "GFNn-xTB geometry for {}.".format(line[0])
                         )
     # adding conformers calculated before to results
-    try:
-        length = max([len(str(i.name)) for i in tmp_results])
-    except:
-        length = 4 + int(args.nstruc)
     for item in tmp_results:
         print(
-            "RRHO of {:>{digits}}: {:.7f} in sym: {}".format(
-                item.name, float(item.rrho), item.symmetry, digits=length
+            "RRHO of {:{digits}}: {:.7f} in sym: {}".format(
+                item.name, float(item.rrho), item.symmetry, 
+                digits=int(input_object.namelength)
             )
         )
         results.append(item)
     results.sort(key=lambda x: int(x.name[4:]))
 
     # check if at least one conformer is left
-    if len(results) == 0:
+    if not results:
         print("ERROR: No conformers left!")
-        write_json("save_and_exit", json_dict, jsonfile)
+        input_object.write_json("save_and_exit")
 
-    return results, save_errors
+    return results, input_object, save_errors
 
 
 def additive_gsolv(
@@ -8698,14 +8876,15 @@ def additive_gsolv(
     in_part2,
     in_part3,
     results,
-    json_dict,
-    jsonfile,
+    input_object,
     save_errors,
-    digilen,
+    cwd,
+    environsettings
 ):
-    """calculate GBSA-RS or COSMO-RS for part2 or part3"""
-
+    """calculate additive solvation contributions: e.g.
+       GBSA_gsolv , SMD_gsolv or COSMO-RS for part2 or part3"""
     if in_part2:
+        part = "part2"
         if args.gsolv2 == "cosmors":
             js_smodel = "cosmo-rs"
             js_sm_energy = "energy_cosmo-rs"
@@ -8716,10 +8895,13 @@ def additive_gsolv(
             js_sm_energy = "energy_gbsa_gsolv"
             folder = "gbsa_gsolv"
             sm_capital = "GBSA-Gsolv"
-        else:
-            print("ERROR: If this occured, we are on the wrong track.")
-        part = "part2"
+        elif args.gsolv2 == 'smd_gsolv':
+            js_smodel = "smd_gsolv"
+            js_sm_energy = "energy_smd_gsolv"
+            folder = "smd_gsolv"
+            sm_capital = "SMD-Gsolv"
     elif in_part3:
+        part = "part3"
         if args.sm3 == "cosmors":
             js_smodel = "cosmo-rs"
             js_sm_energy = "energy_cosmo-rs"
@@ -8730,45 +8912,48 @@ def additive_gsolv(
             js_sm_energy = "energy_gbsa_gsolv"
             folder = "gbsa_gsolv"
             sm_capital = "GBSA-Gsolv"
-        else:
-            print("ERROR: If this occured, we are on the wrong track.")
-        part = "part3"
-
+        elif args.sm3 == 'smd_gsolv':
+            js_smodel = "smd_gsolv"
+            js_sm_energy = "energy_smd_gsolv"
+            folder = "smd_gsolv"
+            sm_capital = "SMD-Gsolv"
     print("\nCalculating {} contribution to free energy.".format(sm_capital))
     tmp_results = []
-    for i in list(results):
-        if json_dict[i.name][js_smodel] == "calculated":
-            # this conformer was already calculated successfully, it is moved to tmp_results
-            i.gsolv = json_dict[i.name][js_sm_energy]
-            tmp_results.append(results.pop(results.index(i)))
-        elif json_dict[i.name][js_smodel] == "failed":
-            # this conformer was already calculated but the calculation failed, it is removed
+    for conf in list(results):
+        if input_object.json_dict[conf.name][js_smodel] == "calculated":
+            # this conformer was already calculated successfully, 
+            #it is moved to tmp_results
+            conf.gsolv = input_object.json_dict[conf.name][js_sm_energy]
+            tmp_results.append(results.pop(results.index(conf)))
+        elif input_object.json_dict[conf.name][js_smodel] == "failed":
+            # this conformer was already calculated but the calculation 
+            # failed, it is removed
             print(
-                "The {} calculation of {} failed for {} in the previous run. The conformer is "
-                "sorted out.".format(sm_capital, part, i.name)
+                "The {} calculation of {} failed for {} in the previous run. "
+                "The conformer is sorted out.".format(sm_capital, part, conf.name)
             )
-            results.remove(i)
-        elif json_dict[i.name][js_smodel] == "not_calculated":
+            results.remove(conf)
+        elif input_object.json_dict[conf.name][js_smodel] == "not_calculated":
             # this conformer has to be calculated now
             pass
     print(
         "number of further considered conformers: {:{digits}} {}".format(
             "",
             str(len(results) + len(tmp_results)),
-            digits=digilen - len("number of further considered conformers"),
+            digits=input_object.digilen - len("number of further considered conformers"),
         )
     )
-    if len(tmp_results) > 0:
+    if tmp_results:
         print(
-            "The {} calculation was already carried out for {} conformers:".format(
-                sm_capital, str(len(tmp_results))
+            "The {} calculation was already carried out for {} "
+            "conformers:".format(sm_capital, str(len(tmp_results))
             )
         )
         print_block([i.name for i in tmp_results])
         if len(results) > 0:
             print(
-                "The {} calculation is carried out now for {} conformers:".format(
-                    sm_capital, str(len(results))
+                "The {} calculation is carried out now for {} "
+                "conformers:".format(sm_capital, str(len(results))
                 )
             )
             print_block([i.name for i in results])
@@ -8778,8 +8963,9 @@ def additive_gsolv(
         print("Considered conformers:")
         print_block([i.name for i in results])
 
-    if len(results) > 0:
-        # calculate solvation contribution for all conformers that remain in list results
+    if results:
+        # calculate solvation contribution for all conformers that remain 
+        # in list results
         print("Setting up new directories.")
         for conf in list(results):
             tmp_from = os.path.join(cwd, conf.name, args.func)
@@ -8793,40 +8979,42 @@ def additive_gsolv(
             except FileNotFoundError:
                 if not os.path.isfile(os.path.join(tmp_from, "coord")):
                     print(
-                        "ERROR: while copying the coord file from {}! The corresponding "
-                        "file does not exist.".format(tmp_from)
+                        "ERROR: while copying the coord file from {}! "
+                        "The corresponding file does not exist.".format(tmp_from)
                     )
                 elif not os.path.isdir(tmp_to):
                     print("ERROR: Could not create folder {}!".format(tmp_to))
                 print("ERROR: Removing conformer {}!".format(conf.name))
-                json_dict[conf.name][js_smodel] = "failed"
-                json_dict[conf.name][js_sm_energy] = None
+                input_object.json_dict[conf.name][js_smodel] = "failed"
+                input_object.json_dict[conf.name][js_sm_energy] = None
                 if in_part2:
-                    json_dict[conf.name]["consider_for_part3"] = False
-                    json_dict[conf.name]["backup_part3"] = False
+                    input_object.json_dict[conf.name]["consider_for_part3"] = False
+                    input_object.json_dict[conf.name]["backup_part3"] = False
                 if in_part3:
-                    json_dict[conf.name]["consider_for_part4"] = False
+                    input_object.json_dict[conf.name]["consider_for_part4"] = False
                 save_errors.append(
                     "Conformer {} was removed, because IO failed!".format(conf.name)
                 )
                 results.remove(conf)
         print("Constructed all new folders.")
-        if len(results) == 0:
+        if not results:
             print("ERROR: No conformers left!")
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
+        previous_job = job
         if js_smodel == "cosmo-rs":
+            job = tm_job
             instructsolv = {
                 "jobtype": "solv",
                 "chrg": args.chrg,
                 "unpaired": args.unpaired,
                 "solv": args.solv,
-                "boltzmann": args.boltzmann,
                 "temperature": args.temperature,
+                "environ": environsettings,
                 "progsettings": {
                     "omp": args.omp,
                     "tempprogpath": "",
-                    "cosmorssetup": cosmorssetup,
-                    "cosmothermversion": cosmothermversion,
+                    "cosmorssetup": input_object.cosmorssetup,
+                    "cosmothermversion": input_object.cosmothermversion,
                 },
             }
         elif js_smodel == "gbsa_gsolv":
@@ -8836,32 +9024,51 @@ def additive_gsolv(
                 "unpaired": args.unpaired,
                 "solv": args.solv,
                 "gfnv": args.gfnv,
-                "boltzmann": args.boltzmann,
                 "temperature": args.temperature,
+                "environ": environsettings,
                 "progsettings": {
                     "omp": args.omp,
-                    "tempprogpath": xtbpath,
-                    "xtbpath": xtbpath,
+                    "tempprogpath": input_object.xtbpath,
+                    "xtbpath": input_object.xtbpath,
                 },
             }
+        elif js_smodel == "smd_gsolv":
+            job = orca_job
+            instructsolv = {
+                "jobtype": "smd_gsolv",
+                "chrg": args.chrg,
+                "func": args.func,
+                "unpaired": args.unpaired,
+                "solv": args.solv,
+                "sm": "smd",
+                "temperature": args.temperature, # only valid at 298.15
+                "environ": environsettings,
+                "progsettings": {
+                    "omp": args.omp,
+                    "tempprogpath": input_object.orcapath,
+                    "orca_old": input_object.orca_old,
+                },
+            }
+
         results = run_in_parallel(
-            q, resultq, job, maxthreads, results, instructsolv, folder
+            q, resultq, job, int(args.maxthreads), results, instructsolv, folder
         )
+        job = previous_job
         exit_log, fail_rate = check_tasks(results, args)
 
         for i in list(results):
             if not i.success:
                 print(
-                    "\nERROR: A problem has occurred in the {} calculation of {}! The conformer is "
-                    "removed.\n".format(sm_capital, i.name)
+                    "\nERROR: A problem has occurred in the {} calculation "
+                    "of {}! The conformer is removed.\n".format(sm_capital, i.name)
                 )
-                json_dict[i.name][js_smodel] = "failed"
-                json_dict[i.name][js_sm_energy] = None
+                input_object.json_dict[i.name][js_smodel] = "failed"
+                input_object.json_dict[i.name][js_sm_energy] = None
                 if in_part2:
-                    json_dict[i.name]["consider_for_part3"] = False
-                    json_dict[i.name]["backup_part3"] = False
+                    input_object.json_dict[i.name]["consider_for_part3"] = False
+                    input_object.json_dict[i.name]["backup_part3"] = False
                 if in_part3:
-                    json_dict[i.name]["consider_for_part4"] = False
+                    input_object.json_dict[i.name]["consider_for_part4"] = False
                 save_errors.append(
                     "Error in {} calculation for conformer {}".format(
                         sm_capital, i.name
@@ -8870,51 +9077,64 @@ def additive_gsolv(
                 results.remove(i)
         # write energies to json_dict
         for i in results:
-            json_dict[i.name][js_smodel] = "calculated"
-            json_dict[i.name][js_sm_energy] = i.gsolv
+            input_object.json_dict[i.name][js_smodel] = "calculated"
+            input_object.json_dict[i.name][js_sm_energy] = i.gsolv
         if exit_log:
             print(
                 "\nERROR: too many {} calculations failed ({:.2f} %)!".format(
                     sm_capital, fail_rate
                 )
             )
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
     # adding conformers calculated before to results
-    try:
-        length = max([len(str(i.name)) for i in tmp_results])
-    except ValueError:
-        length = 4 + int(args.nstruc)
     for item in tmp_results:
         print(
-            "Gsolv of {:>{digits}}: {:.7f}".format(item.name, item.gsolv, digits=length)
+            "Gsolv of {:>{digits}}: {:.7f}".format(item.name, item.gsolv, digits=input_object.namelength)
         )
         results.append(item)
     results.sort(key=lambda x: int(x.name[4:]))
     # check if at least one conformer is left:
-    if len(results) == 0:
+    if not results:
         print("ERROR: No conformers left!")
-        write_json("save_and_exit", json_dict, jsonfile)
+        input_object.write_json("save_and_exit")
+    return results, input_object
 
-    return results
+def prepforQM(args, q, resultq, job, save_errors, results, input_object, prepfor, folder, instructprep, ifcrashed, removelist=None):
+    """ Run essentially cefine """
+    results = run_in_parallel(
+        q, resultq, job, int(args.maxthreads), results, instructprep, folder
+    )
+    exit_log, fail_rate = check_tasks(results, args)
+    for i in list(results):
+        if not i.success:
+            print(
+                "\nERROR: A problem has occurred in the {} "
+                "preparation for {}! The conformer "
+                "is removed.\n".format(prepfor, i.name)
+            )
+            for key, value in ifcrashed:
+                input_object.json_dict[i.name][key] = value
+            save_errors.append(
+                "Conformer {} was removed, because preparation "
+                "failed!".format(i.name)
+            )
+            results.remove(i)
+            if removelist is not None:
+                removelist.append(i.name)
+    if exit_log:
+        print(
+            "\nERROR: too many preparations failed ({:.2f} %)!".format(
+                fail_rate
+            )
+        )
+        input_object.write_json("save_and_exit")
+    print("Preparation completed.")
+    if removelist is not None:
+        return results, input_object, save_errors, removelist
+    else:
+        return results, input_object, save_errors
 
-
-def correct_anmr_enso(cwd, removelist):
-    """remove conformers with failed calculations from anmr_enso,
-    removelist contains the name of conformers to remove"""
-    with open(
-        os.path.join(cwd, "anmr_enso"), "r", encoding=coding, newline=None
-    ) as inp:
-        data = inp.readlines()
-    for name in removelist:
-        for line in list(data[1:]):
-            if int(line.split()[1]) == int(name[4:]):
-                data[data.index(line)] = "0" + line.lstrip()[1:]
-    with open(os.path.join(cwd, "anmr_enso"), "w", newline=None) as out:
-        for line in data:
-            out.write(line)
-
-
-def enso_startup(cwd):
+def enso_startup(cwd, argv=None):
     """
     1)print header
     2) read cml input,
@@ -8925,31 +9145,6 @@ def enso_startup(cwd):
     7) read or write enso.json
     """
 
-    # all implemented functionals and solvents
-    impsolvents = (
-        "acetone",
-        "chcl3",
-        "acetonitrile",
-        "ch2cl2",
-        "dmso",
-        "h2o",
-        "methanol",
-        "thf",
-        "toluene",
-        "gas",
-    )
-    impfunc = ("pbeh-3c", "b97-3c", "tpss")
-    impfunc3 = ("pw6b95", "wb97x", "dsd-blyp")
-    impfuncJ = ("tpss", "pbe0", "pbeh-3c")
-    impfuncS = ("tpss", "pbe0", "dsd-blyp", "pbeh-3c")
-    impgfnv = ("gfn1", "gfn2")
-    imphref = ("TMS",)
-    impcref = ("TMS",)
-    impfref = ("CFCl3",)
-    imppref = ("TMP", "PH3")
-    impsiref = ("TMS",)
-    orca_old = False
-
     descr = """
      __________________________________________________
     |                                                  |
@@ -8959,120 +9154,73 @@ def enso_startup(cwd):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 1.300                  |
+    |                   version 2.0                    |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
-    |__________________________________________________|"""
+    |__________________________________________________|
+    
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+"""
 
+    input_object = handle_input()
     args = cml(
         descr,
-        impsolvents,
-        impfunc,
-        impfunc3,
-        impfuncJ,
-        impfuncS,
-        impgfnv,
-        imphref,
-        impcref,
-        impfref,
-        imppref,
-        impsiref,
+        input_object.solvents,
+        input_object.impfunc,
+        input_object.impfunc3,
+        input_object.impfuncJ,
+        input_object.impfuncS,
+        input_object.impgfnv,
+        input_object.imphref,
+        input_object.impcref,
+        input_object.impfref,
+        input_object.imppref,
+        input_object.impsiref,
+        input_object.smgsolv2,
+        input_object,
+        argv
     )
     print(descr + "\n")  # print header
+    
+    # printout only read from enso.json
+    if args.doprintout:
+        jsonfile = os.path.join(cwd,"enso.json")
+        if not os.path.isfile(jsonfile):
+            print('ERROR: The file enso.json to be read from is not found!\n'
+                  'Going to exit!')
+            sys.exit(1)
+        input_object.read_json(jsonfile, args)
+        return (
+        args,
+        input_object,
+        )
+    # ENDIF if printout
 
-    # read .ensorc
+    # find path to .ensorc
     if os.path.isfile(os.path.join(cwd, ".ensorc")):
         ensorc = os.path.join(cwd, ".ensorc")
     else:
-        home = expanduser("~")
-        ensorc = os.path.join(home, ".ensorc")
+        ensorc = os.path.join(expanduser("~"), ".ensorc")
         if not os.path.isfile(ensorc):
-            ensorc = ""
-
-    orcapath = ""
-    orcaversion = ""
-    xtbpath = "xtb"
-    crestpath = "crest"
-    mpshiftpath = ""
-    escfpath = ""
-    cosmorssetup = ""
-    # hactive = "off"
-    # cactive = "off"
-    # factive = "off"
-    # pactive = "off"
-    # siactive = "off"
-    spectrumlist = []
-
+            ensorc = False
+    # write ensorc or read from ensorc
     if args.writeensorc:
-        ensorcsettings = handle_input(
-            impsolvents,
-            impgfnv,
-            impfunc,
-            impfunc3,
-            impfuncJ,
-            impfuncS,
-            imphref,
-            impcref,
-            impfref,
-            imppref,
-            impsiref,
-        )
-        ensorcsettings.write_ensorc()
+        input_object.write_ensorc("ensorc_new")
         print(
-            "A new ensorc was written into the current directory!\n"
+            "A new ensorc was written into the current directory file: {}!\n"
             "You have to adjust the settings to your needs and it is"
-            " mandatory to correctly set the program paths!"
+            " mandatory to correctly set the program paths!".format("ensorc_new")
         )
+        print("Additionally move the file to the correct filename: '.ensorc'\n"
+              "and place it either in your home or current directory.")
         print("All done!")
         sys.exit(0)
     elif ensorc:
         print(".ensorc is taken from: {}".format(str(ensorc)))
-        ensorcsettings = handle_input(
-            impsolvents,
-            impgfnv,
-            impfunc,
-            impfunc3,
-            impfuncJ,
-            impfuncS,
-            imphref,
-            impcref,
-            impfref,
-            imppref,
-            impsiref,
-        )
-        (
-            dbpath,
-            cosmothermversion,
-            cosmorssetup,
-            orcapath,
-            crestpath,
-            xtbpath,
-            mpshiftpath,
-            escfpath,
-            orca_old,
-            orcaversion,
-        ) = ensorcsettings.read_program_paths(ensorc)
-        print("\nThe following pathways were read in:")
-        print("    ORCA:         {}".format(orcapath))
-        print("    ORCA Version: {}".format(orcaversion))
-        # print('    TURBOMOLE:  {}'.format(tmpath))
-        print("    GFN-xTB:      {}".format(xtbpath))
-        print("    CREST:        {}".format(crestpath))
-        print("    mpshift:      {}".format(mpshiftpath))
-        print("    escf:         {}".format(escfpath))
-        try:
-            tmp = cosmorssetup.split()
-            if len(tmp) == 9:
-                print("    Set up of COSMO-RS:")
-                print("        {}".format(" ".join(tmp[0:3])))
-                print("        {}".format(" ".join(tmp[3:6])))
-                print("        {}".format(" ".join(tmp[6:9])))
-            else:
-                print("    Set up of COSMO-RS: {}".format(str(cosmorssetup)))
-        except:
-            print("    Set up of COSMO-RS: {}".format(str(cosmorssetup)))
-        print("    Using {}\n    as path to the COSMO-RS DATABASE.\n".format(dbpath))
-        ensorcsettings.read_ensorc_data(args, ensorc, "#NMR data")
+        input_object.read_program_paths(ensorc)
+        error_logical = input_object.process_flags(args, ensorc, "#NMR data", silent=True)
     else:
         print("ERROR: could not find the file .ensorc!")
         print(
@@ -9080,66 +9228,26 @@ def enso_startup(cwd):
             "\n or in the current working directory.\n Going to exit!"
         )
         sys.exit(1)
-
     # Write flags.dat or run program
     if not args.run and not args.checkinput:
-        print("\nWriting data to flags.dat.")
-        ensorcsettings.write_flags(
-            args,
-            impsolvents,
-            impfunc,
-            impfunc3,
-            impfuncJ,
-            impfuncS,
-            impgfnv,
-            imphref,
-            impcref,
-            impfref,
-            imppref,
-            impsiref,
-        )
-    elif (
-        args.run or args.checkinput
-    ):  # if restart is 'on', flags are read from file flags.dat
-        flagsdata = handle_input(
-            impsolvents,
-            impgfnv,
-            impfunc,
-            impfunc3,
-            impfuncJ,
-            impfuncS,
-            imphref,
-            impcref,
-            impfref,
-            imppref,
-            impsiref,
-        )
-        spectrumlist = flagsdata.read_flags(
-            args,
-            impsolvents,
-            impgfnv,
-            impfunc,
-            impfunc3,
-            impfuncJ,
-            impfuncS,
-            imphref,
-            impcref,
-            impfref,
-            imppref,
-            impsiref,
-            "flags.dat",
-            "FLAGS",
-        )
+        print("Writing data to flags.dat.")
+        if os.path.isfile('flags.dat'):
+            shutil.move(os.path.join(cwd, 'flags.dat'), os.path.join(cwd, 'flags.dat' + ".1"))
+        input_object.write_flags(args)
+    elif args.run or args.checkinput:
+        # if restart is 'on', flags are read from file flags.dat
+        error_logical = input_object.process_flags(args, os.path.join(cwd, "flags.dat"),"FLAGS",silent=False)
 
     # check whether crest_conformers.xyz file is available
     if os.path.isfile(os.path.join(cwd, "crest_conformers.xyz")):
         conformersxyz = os.path.join(cwd, "crest_conformers.xyz")
-        print("\nUsing conformers from file crest_conformers.xyz.")
+        input_object.conformersxyz = os.path.join(cwd, "crest_conformers.xyz")
+        print("Using conformers from file {}.".format(conformersxyz))
     else:
         print("\nERROR: Could not find crest_conformers.xyz file!" "\nGoing to exit.")
         sys.exit(1)
 
-    # get nstruc and nat from conformersxyz
+    # get nconf and nat from conformersxyz
     try:
         with open(conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
             stringfile_lines = xyzfile.readlines()
@@ -9147,7 +9255,7 @@ def enso_startup(cwd):
         print("\nERROR: Can not read file {}!" "\nGoing to exit.".format(conformersxyz))
         sys.exit(1)
     try:
-        nat = int(stringfile_lines[0])
+        args.nat = int(stringfile_lines[0])
     except ValueError:
         print(
             "Could not get the number of atoms from file {}, something "
@@ -9160,540 +9268,254 @@ def enso_startup(cwd):
         print("Could not determine the number of conformers from the crest ensemble!")
         sys.exit(1)
 
-    error_logical = False
-    # check if nstruc has been set otherwise read from conformersxyz
-    if not args.nstruc or args.nstruc == "all":
-        args.nstruc = nelements
-    if args.nstruc > nelements:
+    # check if nconf has been set otherwise read from conformersxyz
+    if not args.nconf: # None if all confs
+        args.nconf = nelements
+    if args.nconf > int(nelements):
         print(
             "WARNING: the chosen number of conformers is larger than the number"
             " of conformers of the crest_conformers.xyz file! \nOnly the "
             "conformers in the crest_conformers.xyz file are used."
         )
-        args.nstruc = nelements
-    if crestpath is None:
-        print("\nERROR: path for CREST is not correct!")
-        error_logical = True
-    elif shutil.which(crestpath) is None:
-        print("\nERROR: path for CREST is not correct!")
-        error_logical = True
-    if (
-        args.prog == "tm"
-        or args.prog4 == "tm"
-        or args.gsolv2 == "cosmors"
-        or args.sm3 == "cosmors"
-    ):
-        if shutil.which("cefine") is not None:
-            print("Using cefine from {}".format(shutil.which("cefine")))
-        else:
-            print("\nERROR: cefine has not been found!")
-            error_logical = True
-    if args.prog == "orca" or args.prog3 == "orca" or args.prog4 == "orca":
-        if orcapath is None:
-            print("\nERROR: path for ORCA is not correct!")
-            error_logical = True
-        elif shutil.which(os.path.join(orcapath, "orca")) is None:
-            print("\nERROR: path for ORCA is not correct!")
-            error_logical = True
-        if orca_old is None:
-            print("\nERROR: ORCA version was not found!")
-            error_logical = True
-    if args.rrhoprog == "xtb" or args.ancopt == "on":
-        if xtbpath is None:
-            print("\nERROR: path for xTB is not correct!")
-            error_logical = True
-        elif shutil.which(xtbpath) is None:
-            print("\nERROR: path for xTB is not correct!")
-            error_logical = True
-    if args.part4 == "on" and args.calcJ == "on":
-        if args.prog4 == "tm" or (args.prog == "tm" and args.prog4 == "prog"):
-            if escfpath is None:
-                print("\nERROR: path for escf is not correct!")
-                error_logical = True
-            elif shutil.which(escfpath) is None:
-                print("\nERROR: path for escf is not correct!")
-                error_logical = True
-    if args.part4 == "on" and args.calcS == "on":
-        if args.prog4 == "tm" or (args.prog == "tm" and args.prog4 == "prog"):
-            if mpshiftpath is None:
-                print("\nERROR: path for mpshift is not correct!")
-                error_logical = True
-            elif shutil.which(mpshiftpath) is None:
-                print("\nERROR: path for mpshift is not correct!")
-                error_logical = True
-    if args.gsolv2 == "cosmors" or args.sm3 == "cosmors":
-        if cosmorssetup is None:
-            print("\nERROR: Set up for COSMO-RS has to be written to .ensorc!")
-            error_logical = True
-        if cosmothermversion is None:
-            print("\nERROR: Version of COSMO-RS has to be written to .ensorc!")
-            error_logical = True
-        home = expanduser("~")
-        if shutil.which("cosmotherm") is not None:
-            print("Using COSMOtherm from {}".format(shutil.which("cosmotherm")))
-        else:
-            print("\nERROR: COSMOtherm has not been found!")
-            error_logical = True
-    environsettings = os.environ
-    if (
-        args.prog == "tm"
-        or args.prog3 == "tm"
-        or args.prog4 == "tm"
-        or args.sm3 == "cosmors"
-        or args.gsolv2 == "cosmors"
-    ):
-        # preparation of parallel calculation with TM
-        try:
-            if environsettings["PARA_ARCH"] == "SMP":
-                try:
-                    environsettings["PARNODES"] = str(args.omp)
-                    print(
-                        "PARNODES for TM or COSMO-RS calculation was set "
-                        "to {}".format(environsettings["PARNODES"])
-                    )
-                except:
-                    print("\nERROR: PARNODES can not be changed!")
-                    error_logical = True
-            else:
-                print(
-                    "\nERROR: PARA_ARCH has to be set to SMP for parallel TM "
-                    "calculations!"
-                )
-                if args.run:
-                    error_logical = True
-        except:
-            print(
-                "\nERROR: PARA_ARCH has to be set to SMP and PARNODES have to "
-                "be set\n       for parallel TM calculations!."
-            )
-            if args.run:
-                error_logical = True
+        args.nconf = nelements
+    # for printing of CONFX (reserve space)
+    input_object.namelength = 4 + len(str(int(args.nconf)))
 
-    if args.run or args.checkinput:
-        if args.part4 == "on" and args.calcJ == "off" and args.calcS == "off":
-            args.part4 = "off"
-            print(
-                "WARNING: Neither calculating coupling nor shielding "
-                "constants is activated! Part 4 is not executed."
-            )
-        elif len(spectrumlist) == 0:
-            if args.part4 == "on":
-                print(
-                    "WARNING: No type of NMR spectrum is activated in the "
-                    ".ensorc! Part 4 is not executed."
-                )
-                args.part4 = "off"
-            else:
-                print(
-                    "WARNING: No type of NMR spectrum is activated in " "the .ensorc!"
-                )
-        else:
-            args.fref = "CFCl3"
-            args.pref = "TMP"
-
-    if error_logical and not args.debug:
-        print("\nERROR: ENSO can not continue due to input errors!" "\nGoing to exit!")
-        sys.exit(1)
-
-    # print parameter setting
-    print("\n-----------------------------------------------------------")
-    print(" PARAMETERS")
-    print("-----------------------------------------------------------\n")
-
-    digilen = 60
-    print(
-        "number of atoms in system: {:{digits}} {}".format(
-            "", nat, digits=digilen - len("number of atoms in system")
-        )
-    )
-    print(
-        "number of conformers: {:{digits}} {}".format(
-            "", args.nstruc, digits=digilen - len("number of conformers")
-        )
-    )
-    print(
-        "charge: {:{digits}} {}".format("", args.chrg, digits=digilen - len("charge"))
-    )
-    print(
-        "unpaired: {:{digits}} {}".format(
-            "", args.unpaired, digits=digilen - len("unpaired")
-        )
-    )
-    if args.solv:
-        print(
-            "solvent: {:{digits}} {}".format(
-                "", args.solv, digits=digilen - len("solvent")
-            )
-        )
-    else:
-        print(
-            "solvent: {:{digits}} {}".format("", "gas", digits=digilen - len("solvent"))
-        )
-    print(
-        "program for part1 and part2: {:{digits}} {}".format(
-            "", args.prog, digits=digilen - len("program for part1 and part2")
-        )
-    )
-    print(
-        "program for part 3: {:{digits}} {}".format(
-            "", args.prog3, digits=digilen - len("program for part 3")
-        )
-    )
-    if args.prog4:
-        print(
-            "program for part 4: {:{digits}} {}".format(
-                "", args.prog4, digits=digilen - len("program for part 4")
-            )
-        )
-    else:
-        print(
-            "program for part 4: {:{digits}} {}".format(
-                "", "main program", digits=digilen - len("program for part 4")
-            )
-        )
-    print(
-        "using ANCOPT implemented in GFN-xTB for the optimization: {:{digits}} {}".format(
-            "",
-            str(args.ancopt),
-            digits=digilen
-            - len("using ANCOPT implemented in GFN-xTB for the optimization"),
-        )
-    )
-    print(
-        "program for RRHO in part 2 and part 3: {:{digits}} {}".format(
-            "",
-            args.rrhoprog,
-            digits=digilen - len("program for RRHO in part 2 and part 3"),
-        )
-    )
-    print(
-        "temperature: {:{digits}} {}".format(
-            "", args.temperature, digits=digilen - len("temperature")
-        )
-    )
-    if args.rrhoprog == "xtb":
-        print(
-            "GFN-xTB version for RRHO in part 2 and part 3: {:{digits}} {}".format(
-                "",
-                args.gfnv,
-                digits=digilen - len("GFN-xTB version for RRHO in part 2 and part 3"),
-            )
-        )
-    print(
-        "part 1: {:{digits}} {}".format("", args.part1, digits=digilen - len("part 1"))
-    )
-    print(
-        "part 2: {:{digits}} {}".format("", args.part2, digits=digilen - len("part 2"))
-    )
-    print(
-        "part 3: {:{digits}} {}".format("", args.part3, digits=digilen - len("part 3"))
-    )
-    print(
-        "part 4: {:{digits}} {}".format("", args.part4, digits=digilen - len("part 4"))
-    )
-    if args.boltzmann:
-        print(
-            "only boltzmann population: {:{digits}} {}".format(
-                "", "on", digits=digilen - len("only boltzmann population")
-            )
-        )
-    else:
-        print(
-            "only boltzmann population: {:{digits}} {}".format(
-                "", "off", digits=digilen - len("only boltzmann population")
-            )
-        )
-    if args.backup:
-        print(
-            "calculate backup conformers: {:{digits}} {}".format(
-                "", "on", digits=digilen - len("calculate backup conformers")
-            )
-        )
-    else:
-        print(
-            "calculate backup conformers: {:{digits}} {}".format(
-                "", "off", digits=digilen - len("calculate backup conformers")
-            )
-        )
-    print(
-        "functional for part 1 and 2: {:{digits}} {}".format(
-            "", args.func, digits=digilen - len("functional for part 1 and 2")
-        )
-    )
-    print(
-        "functional for part 3: {:{digits}} {}".format(
-            "", args.func3, digits=digilen - len("functional for part 3")
-        )
-    )
-    print(
-        "basis set for part 3: {:{digits}} {}".format(
-            "", str(args.basis3), digits=digilen - len("basis set for part 3")
-        )
-    )
-    print(
-        "calculate couplings: {:{digits}} {}".format(
-            "", str(args.calcJ), digits=digilen - len("calculate couplings")
-        )
-    )
-    print(
-        "functional for coupling calculation: {:{digits}} {}".format(
-            "", args.funcJ, digits=digilen - len("functional for coupling calculation")
-        )
-    )
-    print(
-        "basis set for coupling calculation: {:{digits}} {}".format(
-            "", args.basisJ, digits=digilen - len("basis set for coupling calculation")
-        )
-    )
-    print(
-        "calculate shieldings: {:{digits}} {}".format(
-            "", str(args.calcS), digits=digilen - len("calculate shieldings")
-        )
-    )
-    print(
-        "functional for shielding calculation: {:{digits}} {}".format(
-            "", args.funcS, digits=digilen - len("functional for shielding calculation")
-        )
-    )
-    print(
-        "basis set for shielding calculation: {:{digits}} {}".format(
-            "", args.basisS, digits=digilen - len("basis set for shielding calculation")
-        )
-    )
-    print(
-        "threshold for part 1: {:{digits}} {} kcal/mol".format(
-            "", args.thr1, digits=digilen - len("threshold for part 1")
-        )
-    )
-    print(
-        "threshold for part 2: {:{digits}} {} kcal/mol".format(
-            "", args.thr2, digits=digilen - len("threshold for part 2")
-        )
-    )
-    if args.sm:
-        print(
-            "solvent model for part 1 and part 2: {:{digits}} {}".format(
-                "", args.sm, digits=digilen - len("solvent model for part 1 and part 2")
-            )
-        )
-    else:
-        print(
-            "solvent model for part 1 and part 2: {:{digits}} {}".format(
-                "",
-                "default",
-                digits=digilen - len("solvent model for part 1 and part 2"),
-            )
-        )
-    if args.gsolv2:
-        print(
-            "solvent model for Gsolv contribution of part 2: {:{digits}} {}".format(
-                "",
-                args.gsolv2,
-                digits=digilen - len("solvent model for Gsolv contribution of part 2"),
-            )
-        )
-    else:
-        print(
-            "solvent model for Gsolv contribution of part 2: {:{digits}} {}".format(
-                "",
-                "default",
-                digits=digilen - len("solvent model for Gsolv contribution of part 2"),
-            )
-        )
-    if args.sm3:
-        print(
-            "solvent model for part 3: {:{digits}} {}".format(
-                "", args.sm3, digits=digilen - len("solvent model for part 3")
-            )
-        )
-    else:
-        print(
-            "solvent model for part 3: {:{digits}} {}".format(
-                "", "default", digits=digilen - len("solvent model for part 3")
-            )
-        )
-    if args.sm4:
-        print(
-            "solvent model for part 4: {:{digits}} {}".format(
-                "", args.sm4, digits=digilen - len("solvent model for part 4")
-            )
-        )
-    else:
-        print(
-            "solvent model for part 4: {:{digits}} {}".format(
-                "", "default", digits=digilen - len("solvent model for part 4")
-            )
-        )
-    if args.check:
-        print(
-            "cautious checking for error and failed calculations: {:{digits}} {}".format(
-                "",
-                "on",
-                digits=digilen
-                - len("cautious checking for error and failed calculations"),
-            )
-        )
-    else:
-        print(
-            "cautious checking for error and failed calculations: {:{digits}} {}".format(
-                "",
-                "off",
-                digits=digilen
-                - len("cautious checking for error and failed calculations"),
-            )
-        )
-    if args.crestcheck:
-        print(
-            "checking the DFT-ensemble using CREST: {:{digits}} {}".format(
-                "", "on", digits=digilen - len("checking the DFT-ensemble using CREST")
-            )
-        )
-    else:
-        print(
-            "checking the DFT-ensemble using CREST: {:{digits}} {}".format(
-                "", "off", digits=digilen - len("checking the DFT-ensemble using CREST")
-            )
-        )
-    print(
-        "maxthreads: {:{digits}} {}".format(
-            "", args.maxthreads, digits=digilen - len("maxthreads")
-        )
-    )
-    print("omp: {:{digits}} {}".format("", args.omp, digits=digilen - len("omp")))
-    if len(spectrumlist) > 0:
-        print(
-            "calculating spectra for: {:{digits}} {}".format(
-                "",
-                (", ").join(spectrumlist),
-                digits=digilen - len("calculating spectra for"),
-            )
-        )
-        print(
-            "reference for 1H: {:{digits}} {}".format(
-                "", str(args.href), digits=digilen - len("reference for 1H")
-            )
-        )
-        print(
-            "reference for 13C: {:{digits}} {}".format(
-                "", str(args.cref), digits=digilen - len("reference for 13C")
-            )
-        )
-        print(
-            "reference for 19F: {:{digits}} {}".format(
-                "", str(args.fref), digits=digilen - len("reference for 19F")
-            )
-        )
-        print(
-            "reference for 31P: {:{digits}} {}".format(
-                "", str(args.pref), digits=digilen - len("reference for 31P")
-            )
-        )
-        print(
-            "reference for 29Si: {:{digits}} {}".format(
-                "", str(args.siref), digits=digilen - len("reference for 29Si")
-            )
-        )
-        print(
-            "resonance frequency: {:{digits}} {}".format(
-                "", str(args.mf), digits=digilen - len("resonance frequency")
-            )
-        )
-    print("\nEND of parameters\n")
-
-    maxthreads = args.maxthreads
+    # printing parameters
+    input_object.print_parameters(args)
+    # print and check QM program paths:
+    error_logical = input_object.processQMpaths(args, error_logical)
 
     if not args.run and not args.checkinput:
         print("\nFURTHER USER STEPS:\n")
         print("    1) carefully check/adjust the file flags.dat\n")
         print(
-            "  ( 2) optional but recommended: check your input\n"
+            "    2) optional but recommended: check your input\n"
             "       by executing the ENSO program with the flag "
-            "-checkinput )\n"
+            "-checkinput\n"
         )
         print("    3) execute the ENSO program with the flag -run\n")
         print("\nGoing to exit.\n")
         sys.exit(0)
 
-    jsonfile = "enso.json"
-    json_dict, firstrun = read_json(args.nstruc, cwd, jsonfile, args)
-    if args.checkinput:
-        write_json("save", json_dict, jsonfile)
-        print(
-            "Input check is finished. The ENSO program can be executed with "
-            "the flag -run.\n"
-        )
-        sys.exit(0)
+    if error_logical and not args.debug and args.checkinput:
+        print("\nERROR: ENSO can not continue due to input errors!\n"
+              "       Fix errors and run enso -checkinput again!"
+              "\nGoing to exit!")
+        sys.exit(1)
+    
+    elif error_logical and not args.debug:
+        print("\nERROR: ENSO can not continue due to input errors!"
+              "\nGoing to exit!")
+        sys.exit(1)
 
+    if not error_logical or args.debug:
+        print("-----------------------------------------------------------")
+        print(" Processing data from previous run (enso.json)")
+        print("-----------------------------------------------------------\n")
+        jsonfile = os.path.join(cwd,"enso.json")
+        input_object.read_json(jsonfile, args)
+    if (args.checkinput and not error_logical) or (args.debug and args.checkinput):
+        input_object.write_json("save")
+        print(
+            "\nInput check is finished. The ENSO program can be executed with "
+            "the flag -run.\n"
+            )
+        sys.exit(0)
     return (
         args,
-        jsonfile,
-        json_dict,
-        firstrun,
-        conformersxyz,
-        nat,
-        maxthreads,
-        xtbpath,
-        environsettings,
-        dbpath,
-        cosmothermversion,
-        cosmorssetup,
-        orcapath,
-        orca_old,
-        crestpath,
-        mpshiftpath,
-        escfpath,
-        spectrumlist,
+        input_object,
     )
 
+def sorting_part1(args, results, input_object, save_errors):
+    ''' sorting only based on energy'''
+    au2kcal = 627.50947428
 
-def part1(
-    args, jsonfile, json_dict, conformersxyz, nat, maxthreads, xtbpath, environsettings
-):
+    # calculate relative energies for each conformer with GFN-xTB and DFT
+    if not [i.xtb_energy for i in results if i.xtb_energy is not None]:
+        mingfn = 0.0
+    else:
+        mingfn = float(
+            min([i.xtb_energy for i in results if i.xtb_energy is not None])
+        )
+    mindft = float(min([i.energy_opt for i in results if i.energy_opt is not None]))
+    for i in results:
+        try:
+            i.rel_xtb_energy = float("{:.2f}".format((i.xtb_energy - mingfn) * au2kcal))
+        except (ValueError, TypeError):
+            print(
+                "Problem with {} energy read in from {} for {},"
+                " relative energy is set to 1000.0.".format(str(args.gfnv).upper(), input_object.conformersxyz, i.name)
+            )
+            i.xtb_energy = 1000.0
+            i.rel_xtb_energy = 1000.0
+        try:
+            i.rel_energy = float(
+                "{:.2f}".format((i.energy_opt - mindft) * au2kcal)
+            )
+        except (ValueError, TypeError):
+            print(
+                "\nERROR: A problem has occurred in the optimization of {}!"
+                " The conformer is removed.\n".format(i.name)
+            )
+            input_object.json_dict[i.name]["crude_opt"] = "failed"
+            input_object.json_dict[i.name]["energy_crude_opt"] = None
+            save_errors.append(
+                "Conformer {} was removed, because the optimization "
+                "failed!".format(i.name)
+            )
+            results.remove(i)
+    if not [i.rel_energy for i in results if i.rel_energy is not None]:
+        print("All DFT crude optimization energies are None! Going to exit!!!")
+        if not args.doprintout:
+            input_object.write_json("save_and_exit")
+    else:
+        if len([i.rel_energy for i in results if i.rel_energy is not None]) > 0:
+            maxreldft = max(
+                [i.rel_energy for i in results if i.rel_energy is not None]
+            )
+        else:
+            print(
+                "ERROR: The maximal relative DFT energy could not be "
+                "calculated! Going to exit!"
+            )
+            if not args.doprintout:
+                input_object.write_json("save_and_exit")
+    # only print if args.doprintout !!!
+    with open('part1_energies.dat',"w", newline=None) as out:
+        print("\n*********************************")
+        print("* {:^29} *".format("energies of part1"))
+        print("*********************************")
+        try:
+            length = max([len(str(i.name)) for i in results])
+        except ValueError:
+            length = 4 + int(args.nconf)
+        line = (
+            "{:{digits}}     E(GFN-xTB)    Erel(GFN-xTB)   E({})     Erel({})".format(
+                "CONF#", args.func, args.func, digits=length
+            )
+        )
+        print(line)
+        out.write(line+'\n')
+        line = (
+            "{:{digits}}     [Eh]          [kcal/mol]      [Eh]           [kcal/mol]".format(
+                "", digits=length
+            )
+        )
+        print(line)
+        out.write(line+'\n')
+        lowestenergy = min([item.energy_opt for item in results if item.energy_opt is not None])
+        for i in results:
+            if i.energy_opt != lowestenergy:
+                line = (
+                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}".format(
+                        i.name,
+                        i.xtb_energy,
+                        i.rel_xtb_energy,
+                        i.energy_opt,
+                        i.rel_energy,
+                        digits=length,
+                    )
+                )
+                print(line)
+                out.write(line+'\n')
+            else:
+                line = (
+                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}  <----- lowest".format(
+                        i.name,
+                        i.xtb_energy,
+                        i.rel_xtb_energy,
+                        i.energy_opt,
+                        i.rel_energy,
+                        digits=length,
+                    )
+                )
+                print(line)
+                out.write(line+'\n')
+    return results, maxreldft, save_errors, input_object
+
+def printout_part1(args, input_object):
+    """ printout of part1 only based on enso.json, no calculation!"""
+    print("-----------------------------------------------------------")
+    print("         PRINTOUT of PART1 - Crude optimization ")
+    print("-----------------------------------------------------------")
+    results = []
+    # create results of all converged crude dft optimizations:
+    for i in range(1, args.nconf + 1):
+        conf = "".join("CONF" + str(i))
+        if input_object.json_dict[conf]["crude_opt"] == "calculated":
+            # this conformer was calculated successfully before
+            conformer = qm_job()
+            conformer.name = conf
+            conformer.energy_opt = input_object.json_dict[conf]["energy_crude_opt"]
+            conformer.xtb_energy = input_object.json_dict[conf]["xtb_energy"]
+            conformer.success = True
+            if not input_object.json_dict[conf]["removed_by_user"]:
+                results.append(conformer)
+    # in case of old enso.json, xtb_energy information is not available
+    counter = 0
+    for conf in results:
+        if conf.xtb_energy == None:
+            counter+=1
+    if counter/len(results) >0.75 :
+        try:
+            with open(input_object.conformersxyz, "r", encoding=coding, newline=None) as xyzfile:
+                stringfile_lines = xyzfile.readlines()
+            args.nat = int(stringfile_lines[0])
+            results = conformersxyz2coord(input_object.conformersxyz, 
+            args.nat, 
+            args.func, 
+            args.nconf, 
+            results, 
+            input_object, 
+            onlyenergy=True)
+        except (AttributeError, ValueError, FileNotFoundError):
+            pass
+    # check if results list is not empty:
+    if results:
+        # do the sorting and printing of part1:
+        results, maxreldft, save_errors, input_object = sorting_part1(args, results, input_object, [])
+    else:
+        print('Error: No conformers found or file enso.json is missing!')
+    return
+
+def part1(args, environsettings, input_object):
     """ Run crude optimization"""
-    save_errors = (
-        []
-    )  # list to store all relevant errors and print them bundled for user convenience
+    # list to store all relevant errors and print them bundled for user convenience
+    save_errors = []
+    info = []
     print("-----------------------------------------------------------")
     print(" PART 1 - Crude optimization for initial evaluation")
     print("-----------------------------------------------------------\n")
-    if args.part1 == "on":
-        # print flags for part 1
-        digilen = 60
-        print(
-            "program: {:{digits}} {}".format(
-                "", args.prog, digits=digilen - len("program")
-            )
-        )
-        print(
-            "functional for part1 and 2: {:{digits}} {}".format(
-                "", args.func, digits=digilen - len("functional for part1 and 2")
-            )
-        )
-        print(
-            "using ANCOPT algorithm for optimization: {:{digits}} {}".format(
-                "",
-                args.ancopt,
-                digits=digilen - len("using ANCOPT algorithm for optimization"),
-            )
-        )
-        if args.solv:
-            print(
-                "solvent model: {:{digits}} {}".format(
-                    "", args.sm, digits=digilen - len("solvent model")
-                )
-            )
-        print(
-            "threshold: {:{digits}} {} kcal/mol".format(
-                "", args.thr1, digits=digilen - len("threshold")
-            )
-        )
-        print(
-            "starting number of considered conformers: {:{digits}} {}\n".format(
-                "",
-                args.nstruc,
-                digits=digilen - len("starting number of considered conformers"),
-            )
-        )
+    if args.part1:
+        # print flags for part1
+        info.append(["prog", "program", args.prog])
+        info.append(["func", "functional for part1 and 2", args.func])
+        info.append(["ancopt", "using ANCOPT algorithm for optimization", args.ancopt])
+        if args.solv not in ('gas', None):
+            info.append(["sm", "solvent model", args.sm ])
+            info.append(["solvent", "Solvent", args.solv])
+        info.append(["part1_threshold", "threshold", args.thr1])
+        info.append(["nconf", "starting number of considered conformers", args.nconf])
+        optionsexchange = {True: 'on', False: 'off'}
+        for item in info:
+            if item[0] == 'justprint':
+                print(item[1:][0])
+            else:
+                option = getattr(args, input_object.key_args_dict.get(item[0], item[0]))
+                if option is True or option is False:
+                    tmpopt = optionsexchange[option]
+                else:
+                    tmpopt = option
+                if item[0] in ('sm', 'sm3', 'smgsolv2', 'sm4') and option is None:
+                    tmpopt = 'sm'
+                print("{}: {:{digits}} {}".format(
+                    item[1],
+                    "",
+                    tmpopt,
+                    digits=input_object.digilen-len(item[1])
+                    ))
+        # end print
 
         if args.prog == "tm":
             job = tm_job
@@ -9702,71 +9524,71 @@ def part1(
         else:
             print("ERROR jobtype (ORCA,TM) is not set correctly! Going to exit!")
             sys.exit(1)
-        # list of numbers of all considered conformers, needed for converting
-        # conformersxyz in coord files
-        all_confs_list = []
-        new_confs_list = []  # list of numbers of considered conformers
-        old_confs_list = []  # calculated before
-        for i in range(1, args.nstruc + 1):
+
+        results = []
+        tmp_results = []
+        for i in range(1, args.nconf + 1):
             conf = "".join("CONF" + str(i))
-            if json_dict[conf]["crude_opt"] == "calculated":
+            if input_object.json_dict[conf]["crude_opt"] == "calculated":
                 # this conformer was calculated successfully before
-                all_confs_list.append(i)
-                old_confs_list.append(i)
-            elif json_dict[conf]["crude_opt"] == "failed":
-                # this conformer was calculated before but the crude optimization failed
+                conformer = job()
+                conformer.name = conf
+                conformer.energy_opt = input_object.json_dict[conf]["energy_crude_opt"]
+                conformer.xtb_energy = input_object.json_dict[conf]["xtb_energy"]
+                conformer.success = True
+                tmp_results.append(conformer)
+            elif input_object.json_dict[conf]["crude_opt"] == "failed":
+                # this conformer was calculated before but the crude 
+                # optimization failed
                 print(
-                    "The calculation of part 1 failed for {} in the previous run."
+                    "The calculation of part1 failed for {} in the previous run."
                     " The conformer is sorted out.".format(conf)
                 )
-            elif json_dict[conf]["crude_opt"] == "not_calculated":
-                # this conformer was not calculated before, so it has be calculated now
-                new_confs_list.append(i)
-                all_confs_list.append(i)
-            if json_dict[conf]["removed_by_user"]:
+            elif input_object.json_dict[conf]["crude_opt"] == "not_calculated":
+                # this conformer was not calculated before, so it 
+                # has be calculated now
+                conformer = job()
+                conformer.name = conf
+                results.append(conformer)
+            if input_object.json_dict[conf]["removed_by_user"]:
                 print("CONF{} is removed as requested by the user!".format(i))
                 try:
-                    if i in new_confs_list:
-                        new_confs_list.remove(i)
-                    if i in old_confs_list:
-                        old_confs_list.remove(i)
-                    if i in all_confs_list:
-                        all_confs_list.remove(i)
+                    for conformer in list(results):
+                        if conformer.name == conf:
+                            results.remove(conformer)
+                    for conformer in list(tmp_results):
+                        if conformer.name == conf:
+                            tmp_results.remove(conformer)
                 except Exception as e:
-                    print(
-                        "ERROR: CONF{} could not be removed from user-input".format(i)
-                    )
-                    save_errors.append(
-                        "ERROR: CONF{} could not be removed from user-input".format(i)
-                    )
+                    prnterr =  "ERROR: CONF{} could not be removed from user-input".format(i)
+                    print(prnterr)
+                    save_errors.append(prnterr)
         # exit if there are no conformers at all
-        if len(all_confs_list) == 0:
+        if not results and not tmp_results:
             print("ERROR: There are no conformers!")
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
         # which conformers are considered now and which not
-        if len(old_confs_list) >= 1:
+        if tmp_results:
             print("The crude optimization was calculated before for:")
-            print_block(["CONF" + str(x) for x in old_confs_list])
-        if len(new_confs_list) >= 1:
+            print_block([i.name for i in tmp_results])
+            #get GFNn/GFNFF-xTB energies only!
+            tmp_results = conformersxyz2coord(input_object.conformersxyz, args.nat, args.func, args.nconf, tmp_results, input_object, onlyenergy=True)
+        if results:
             print("The crude optimization is calculated for:")
-            print_block(["CONF" + str(x) for x in new_confs_list])
+            print_block([i.name for i in results])
         else:
             print("No conformers are considered additionally.")
-
         # check if directories for conformers exist
-        check_for_folder(
-            ["CONF" + str(i) for i in old_confs_list], args.func, args.debug
-        )
-
-        if len(new_confs_list) > 0:
-            directories = new_folders(new_confs_list, args.func, save_errors)
+        check_for_folder([i.name for i in tmp_results], args.func, args.debug, input_object)
+        if results:
+            directories = new_folders([i.name for i in results], args.func, save_errors)
             # check if at least one conformer is left
-            if len(new_confs_list) == 0 and len(old_confs_list) == 0:
+            if not tmp_results and not results:
                 print("ERROR: No conformers left!")
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
 
-            # get GFNx-xTB energies
-            gfne = conformersxyz2coord(conformersxyz, nat, args.func, new_confs_list)
+            # get GFNn/GFNFF-xTB energies and write coordinates to folders
+            results = conformersxyz2coord(input_object.conformersxyz, args.nat, args.func, args.nconf, results, input_object, onlyenergy=False)
 
             # setup queues
             q = Queue()
@@ -9781,41 +9603,17 @@ def part1(
                 "solv": args.solv,
                 "sm": args.sm,
                 "omp": args.omp,
+                "environ": environsettings,
                 "progsettings": {
                     "tempprogpath": "",
-                    "xtbpath": xtbpath,
-                    "orca_old": orca_old,
                     "omp": args.omp,
                 },
             }
-            results = run_in_parallel(
-                q, resultq, job, maxthreads, directories, instructprep, args.func
-            )
-            exit_log, fail_rate = check_tasks(results, args)
-            for conf in list(results):
-                if not conf.success:
-                    print(
-                        "\nERROR: A problem has occurred in the preparation of "
-                        "the optimization of {}! The "
-                        "conformer is removed.\n".format(conf.name)
-                    )
-                    json_dict[conf.name]["crude_opt"] = "failed"
-                    json_dict[conf.name]["consider_for_part2"] = False
-                    json_dict[conf.name]["backup_for_part2"] = False
-                    save_errors.append(
-                        "Conformer {} was removed, because preparation failed!".format(
-                            conf.name
-                        )
-                    )
-                    results.remove(conf)
-            if exit_log:
-                print(
-                    "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                        fail_rate
-                    )
-                )
-                write_json("save_and_exit", json_dict, jsonfile)
-            print("Preparation completed.")
+            ifcrashed = {"crude_opt": "failed",
+                         "consider_for_part2": False,
+                         "backup_for_part2": False}
+
+            results, input_object, save_errors = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'optimization', args.func,  instructprep, ifcrashed)
 
             # Crude optimization of part1:
             instructopt = {
@@ -9826,21 +9624,22 @@ def part1(
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": False,
+                "environ": environsettings,
                 "progsettings": {"omp": args.omp, "tempprogpath": ""},
             }
-            if args.ancopt == "on":
+            if args.ancopt:
                 instructopt["jobtype"] = "xtbopt"
-                instructopt["progsettings"]["xtbpath"] = xtbpath
+                instructopt["progsettings"]["xtbpath"] = input_object.xtbpath
             else:
                 instructopt["jobtype"] = "opt"
             if job == tm_job:
                 instructopt["progsettings"]["tempprogpath"] = ""
             elif job == orca_job:
-                instructopt["progsettings"]["tempprogpath"] = orcapath
-                instructopt["progsettings"]["orca_old"] = orca_old
+                instructopt["progsettings"]["tempprogpath"] = input_object.orcapath
+                instructopt["progsettings"]["orca_old"] = input_object.orca_old
 
             results = run_in_parallel(
-                q, resultq, job, maxthreads, results, instructopt, args.func
+                q, resultq, job, int(args.maxthreads), results, instructopt, args.func
             )
             exit_log, fail_rate = check_tasks(results, args)
             # sort out conformers with failed optimizations
@@ -9850,9 +9649,9 @@ def part1(
                         "\nERROR: A problem has occurred in the optimization "
                         "of {}! The conformer is removed.\n".format(conf.name)
                     )
-                    json_dict[conf.name]["crude_opt"] = "failed"
-                    json_dict[conf.name]["consider_for_part2"] = False
-                    json_dict[conf.name]["backup_for_part2"] = False
+                    input_object.json_dict[conf.name]["crude_opt"] = "failed"
+                    input_object.json_dict[conf.name]["consider_for_part2"] = False
+                    input_object.json_dict[conf.name]["backup_for_part2"] = False
                     save_errors.append(
                         "Conformer {} was removed, because the optimization "
                         "failed!".format(conf.name)
@@ -9860,146 +9659,43 @@ def part1(
                     results.remove(conf)
             # update json_dict
             for conf in results:
-                json_dict[conf.name]["crude_opt"] = "calculated"
-                json_dict[conf.name]["energy_crude_opt"] = conf.energy
-
+                conf.energy_opt = conf.energy
+                conf.energy = None
+                input_object.json_dict[conf.name]["crude_opt"] = "calculated"
+                input_object.json_dict[conf.name]["energy_crude_opt"] = conf.energy_opt
             if exit_log:
                 print(
                     "\nERROR: too many optimizations failed ({:.2f} %)!".format(
                         fail_rate
                     )
                 )
-                write_json("save_and_exit", json_dict, jsonfile)
-        # END of if args.part1 == 'on':
+                input_object.write_json("save_and_exit")
+        # END of if args.part1:
         else:
             # all conformers were already calculated
             results = []
         # adding conformers calculated before to results
         try:
-            length = max([len(str(x)) for x in old_confs_list]) + 4
+            length = max([len(str(conf.name)) for conf in tmp_results])
         except ValueError:
-            length = 4 + int(args.nstruc)
-        for item in old_confs_list:
-            tmp = job()
-            tmp.name = "".join("CONF" + str(item))
-            tmp.success = True
-            tmp.energy = json_dict["".join("CONF" + str(item))]["energy_crude_opt"]
-            results.append(tmp)
+            length = 4 + int(args.nconf)
+        for conf in list(tmp_results):
             print(
                 "Crude optimization energy of {:>{digits}}: {:.7f}".format(
-                    tmp.name, float(tmp.energy), digits=length
+                    conf.name, float(conf.energy_opt), digits=length
                 )
             )
+            results.append(conf)
+            tmp_results.remove(conf)
         results.sort(key=lambda x: int(x.name[4:]))
 
         # check if at least one calculation was successful
-        if len(results) == 0:
+        if not results:
             print("ERROR: No conformer left!")
-            write_json("save_and_exit", json_dict, jsonfile)
-        # get GFN-xTB energies
-        gfne = conformersxyz2coord(conformersxyz, nat, args.func, all_confs_list, True)
-        # calculate relative energies for each conformer with GFN-xTB and DFT
-        for i in results:
-            for item in gfne:
-                if item[0] == i.name:
-                    i.xtb_energy = item[1]
+            input_object.write_json("save_and_exit")
 
-        if len(results) == 1 or len(
-            [i.xtb_energy for i in results if i.xtb_energy is not None]
-        ) in [0, 1]:
-            mingfn = 0.0
-        else:
-            mingfn = float(
-                min([i.xtb_energy for i in results if i.xtb_energy is not None])
-            )
-
-        mindft = float(min([i.energy for i in results if i.energy is not None]))
-
-        for i in results:
-            try:
-                i.rel_xtb_energy = float(
-                    "{:.2f}".format((i.xtb_energy - mingfn) * 627.50947428)
-                )
-            except:
-                print(
-                    "Problem with GFN-xTB energy read in from {} for {},"
-                    " relative energy is set to 0.00.".format(conformersxyz, i.name)
-                )
-                i.xtb_energy = 0.00
-                i.rel_xtb_energy = 0.00
-            try:
-                i.rel_energy = float(
-                    "{:.2f}".format((i.energy - mindft) * 627.50947428)
-                )
-            except:
-                print(
-                    "\nERROR: A problem has occurred in the optimization of {}!"
-                    " The conformer is removed.\n".format(i.name)
-                )
-                json_dict[i.name]["crude_opt"] = "failed"
-                json_dict[i.name]["energy_crude_opt"] = None
-                save_errors.append(
-                    "Conformer {} was removed, because the optimization "
-                    "failed!".format(i.name)
-                )
-                results.remove(i)
-
-        if not len([i.rel_energy for i in results if i.rel_energy is not None]) > 0:
-            print("All DFT crude optimization energies are None! Going to exit!!!")
-            write_json("save_and_exit", json_dict, jsonfile)
-        else:
-            if len([i.rel_energy for i in results if i.rel_energy is not None]) > 0:
-                maxreldft = max(
-                    [i.rel_energy for i in results if i.rel_energy is not None]
-                )
-            else:
-                print(
-                    "ERROR: The maximal relative DFT energy could not be "
-                    "calculated! Going to exit!"
-                )
-                write_json("save_and_exit", json_dict, jsonfile)
-
-        print("\n*********************************")
-        print("* {:^29} *".format("energies of part 1"))
-        print("*********************************")
-        try:
-            length = max([len(str(i.name)) for i in results])
-        except ValueError:
-            length = 4 + int(args.nstruc)
-        print(
-            "{:{digits}}     E(GFN-xTB)    Erel(GFN-xTB)   E({})     Erel({})".format(
-                "CONF#", args.func, args.func, digits=length
-            )
-        )
-        print(
-            "{:{digits}}     [Eh]          [kcal/mol]      [Eh]           [kcal/mol]".format(
-                "", digits=length
-            )
-        )
-        lowestenergy = min([item.energy for item in results if item.energy is not None])
-        for i in results:
-            if i.energy != lowestenergy:
-                print(
-                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}".format(
-                        i.name,
-                        i.xtb_energy,
-                        i.rel_xtb_energy,
-                        i.energy,
-                        i.rel_energy,
-                        digits=length,
-                    )
-                )
-            else:
-                print(
-                    "{:{digits}}    {:>10.7f}     {:>5.2f}         {:>10.7f}     {:>5.2f}  <----- lowest".format(
-                        i.name,
-                        i.xtb_energy,
-                        i.rel_xtb_energy,
-                        i.energy,
-                        i.rel_energy,
-                        digits=length,
-                    )
-                )
+        ### perform evaluation and sorting in part1 xtbenergy and crude dft optimization energy
+        results, maxreldft, save_errors, input_object = sorting_part1(args, results, input_object, save_errors)
 
         backuplist = []
         if maxreldft > args.thr1:
@@ -10008,20 +9704,20 @@ def part1(
             print("*********************************")
             tmp_consider = []
             for i in list(results):
-                json_dict[i.name]["crude_opt"] = "calculated"
-                json_dict[i.name]["energy_crude_opt"] = i.energy
+                input_object.json_dict[i.name]["crude_opt"] = "calculated"
+                input_object.json_dict[i.name]["energy_crude_opt"] = i.energy_opt
                 if i.rel_energy <= args.thr1:
                     tmp_consider.append(i.name)
-                    json_dict[i.name]["consider_for_part2"] = True
-                    json_dict[i.name]["backup_for_part2"] = False
+                    input_object.json_dict[i.name]["consider_for_part2"] = True
+                    input_object.json_dict[i.name]["backup_for_part2"] = False
                 elif args.thr1 < i.rel_energy <= (args.thr1 + 2):
                     backuplist.append(i)
-                    json_dict[i.name]["consider_for_part2"] = False
-                    json_dict[i.name]["backup_for_part2"] = True
+                    input_object.json_dict[i.name]["consider_for_part2"] = False
+                    input_object.json_dict[i.name]["backup_for_part2"] = True
                     results.remove(i)
                 else:
-                    json_dict[i.name]["consider_for_part2"] = False
-                    json_dict[i.name]["backup_for_part2"] = False
+                    input_object.json_dict[i.name]["consider_for_part2"] = False
+                    input_object.json_dict[i.name]["backup_for_part2"] = False
                     results.remove(i)
             print_block(tmp_consider)
         else:
@@ -10031,12 +9727,12 @@ def part1(
                 "considered further.".format(str(args.thr1))
             )
             for i in list(results):
-                json_dict[i.name]["crude_opt"] = "calculated"
-                json_dict[i.name]["energy_crude_opt"] = i.energy
-                json_dict[i.name]["consider_for_part2"] = True
-                json_dict[i.name]["backup_for_part2"] = False
+                input_object.json_dict[i.name]["crude_opt"] = "calculated"
+                input_object.json_dict[i.name]["energy_crude_opt"] = i.energy_opt
+                input_object.json_dict[i.name]["consider_for_part2"] = True
+                input_object.json_dict[i.name]["backup_for_part2"] = False
 
-        if len(backuplist) >= 1:
+        if backuplist:
             print("\n**********************")
             print("* backup conformers  *")
             print("**********************")
@@ -10051,81 +9747,264 @@ def part1(
             for item in backuplist:
                 print(
                     "{:8} {:5f}      {:5.2f}".format(
-                        item.name, item.energy, item.rel_energy
+                        item.name, item.energy_opt, item.rel_energy
                     )
                 )
         else:
             print("There are no backup conformers.")
+        input_object.write_json("save")
 
-        write_json("save", json_dict, jsonfile)
-
-        if len(save_errors) > 0:
+        if save_errors:
             print("***---------------------------------------------------------***")
             print("Printing most relevant errors again, just for user convenience:")
             for error in list(save_errors):
                 print(save_errors.pop())
             print("***---------------------------------------------------------***")
         print("\nEND of part1.\n")
-    else:  # if part 1 is switched off
+    else:  # if part1 is switched off
         print("PART1 has been skipped by user.")
-        print("Reading from file {} if necessary.\n".format(jsonfile))
+        print("Reading from file {} if necessary.\n".format(input_object.jsonfile))
         try:
             results
         except NameError:
             results = []
-    return results, json_dict
+    return results, input_object
 
 
-def part2(
-    args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
-):
+def sorting_part23(args, results, inpart, input_object, save_errors):
+    ''' sorting only based on free energy'''
+    au2kcal = 627.50947428
+    # calculate low level free energy
+    # gasphase or solvent single-point is written to conf.energy_opt
+    if not args.rrhoprog:
+        rrho = 'off'
+    else:
+        rrho = args.rrhoprog
+        if args.rrhoprog == 'xtb':
+            rrho = str(args.gfnv).upper() + '-xTB'
+    if args.solv in ('gas', None):
+        solventmodel = 'gas phase'
+    else:
+        if inpart == 'part2':
+            if args.gsolv2 == 'sm':
+                solventmodel = args.sm
+            else:
+                solventmodel = args.gsolv2
+        if inpart == 'part3':
+            if args.sm3 == 'sm':
+                solventmodel = args.sm
+            else: 
+                solventmodel = args.sm3
+    if inpart == 'part2':
+        outputfile = 'part2_free_energies.dat'
+        getfreee = {'energy': 'energy_opt'}
+        iferror = {"consider_for_part2": False, "consider_for_part3": False, "backup_for_part3": False}
+        prfree = {'energy': args.func, 'gsolv': solventmodel, 'rrho': rrho}
+    elif inpart == 'part3':
+        outputfile = 'part3_free_energies.dat'
+        getfreee = {'energy': 'sp3_energy'}
+        iferror = {"consider_for_part4": False}
+        prfree = {'energy': str(args.func3) +'/'+ str(args.basis3) , 'gsolv': solventmodel, 'rrho': rrho}
+    allitems = len(results)
+    for conf in results:
+        try:
+            conf.free_energy = getattr(conf, getfreee['energy'], None) + conf.gsolv + conf.rrho
+        except (ValueError, TypeError):
+            conf.free_energy = None
+            # something went wrong and we do not know what
+            print(
+                "The conformer {} was removed because the free energy could "
+                "not be calculated! {}: energy: {}, rrho: {}, gsolv: {}.".format(
+                    conf.name, conf.name, getattr(conf, getfreee['energy'], None), conf.rrho, conf.gsolv)
+                )
+            for key,value in iferror.items():
+                input_object.json_dict[conf.name][key] = value
+            save_errors.append(
+                "Error in summing up free energy for conformer {}".format(conf.name)
+            )
+            results.remove(conf)
+    # check if at least one calculation was successful
+    if not results:
+        print("ERROR: No conformers left!")
+        if not args.doprintout:
+            input_object.write_json("save_and_exit")
+    # evaluate calculated free energies G
+    try:
+        minfree = min(
+            [conf.free_energy for conf in results if conf.free_energy is not None]
+            )
+    except:
+        print("\nERROR: No value to calculate free energy differences from {}!".format(str(inpart).upper()))
+        if not args.doprintout:
+            input_object.write_json("save_and_exit")
+        else:
+            return "", "", "", ""
+    for item in results:
+        if item.success:
+            try:
+                item.rel_free_energy = float(
+                    "{:.2f}".format((item.free_energy - minfree) * au2kcal)
+                )
+            except (ValueError, TypeError):
+                print(
+                    "Could not calculate relative free energy for conformer "
+                    "{}. rel free energy is set to a "
+                    "1000.00!".format(item.name)
+                )
+                item.rel_free_energy = 1000.00
+    # only print if args.doprintout !!!
+    with open(outputfile,"w", newline=None) as out:
+        print("\n*********************************")
+        print("* {:^29} *".format("Gibbs free energies of {}".format(inpart)))
+        print("*********************************")
+        try:
+            length = max([len(str(i.name)) for i in results])
+            length2 = len(str(prfree['energy']))
+            if length2 < 18:
+                length2 = 18
+        except ValueError:
+            length = 4 + int(args.nconf)
+        line = ("{:{digits}}  {:{digit2}}    {:12}  {:12}  {:12}    {:14}".format(
+                "CONF#", "E [Eh]", "Gsolv [Eh]","RRHO [Eh]", "Gtot [Eh]",
+                 "rel. Gtot [kcal/mol]]", digits=length, digit2 = length2))
+        print(line)
+        out.write(line+'\n')
+        line = ("{:{digits}}  {:{digit2}}    {:12}  {:12}".format(
+                "",  prfree['energy'], prfree['gsolv'], prfree['rrho'],  digits=length, digit2 = length2))
+        print(line)
+        out.write(line+'\n')
+        abst = length2 -10
+        for i in results:
+            if i.free_energy != minfree:
+                line = (
+                    "{:{digits}}  {:>10.7f}{:{digit2}}  {:>10.7f}    {:>10.7f}    "
+                    "{:>10.7f}    {:>5.2f}".format(
+                        i.name,
+                        getattr(i, getfreee['energy'], 0.0),
+                        "",
+                        i.gsolv,
+                        i.rrho,
+                        i.free_energy,
+                        i.rel_free_energy,
+                        digits=length,
+                        digit2= abst
+                    )
+                )
+                print(line)
+                out.write(line+'\n')
+            else:
+                line = (
+                    "{:{digits}}  {:>10.7f}{:{digit2}}  {:>10.7f}    {:>10.7f}    "
+                    "{:>10.7f}    {:>5.2f} <----- lowest".format(
+                        i.name,
+                        getattr(i, getfreee['energy'], 0.0),
+                        "",
+                        i.gsolv,
+                        i.rrho,
+                        i.free_energy,
+                        i.rel_free_energy,
+                        digits=length,
+                        digit2= abst 
+                    )
+                )
+                print(line)
+                out.write(line+'\n')
+    if len(results) / allitems <= 0.75 and args.check:
+        print(
+            "\nERROR: Too many free energies are None ({:.2f} %)!".format(
+                len(results) / float(allitems) * 100
+            )
+        )
+        if not args.doprintout:
+            input_object.write_json("save_and_exit")
+    return results, save_errors, minfree, input_object
+
+
+def printout_part2(args, input_object):
+    """ printout of part1 only based on enso.json, no calculation!"""
+    print("\n-----------------------------------------------------------")
+    print("PRINTOUT of PART2 - optimizations and low level free energy")
+    print("-----------------------------------------------------------")
+    results = []
+    # create results of all converged crude dft optimizations:
+    for i in range(1, args.nconf + 1):
+        conf = "".join("CONF" + str(i))
+        if input_object.json_dict[conf]["opt"] == "calculated":
+            # this conformer was calculated successfully before
+            conformer = qm_job()
+            conformer.name = conf
+            conformer.energy_opt = input_object.json_dict[conf]["energy_opt"]
+            conformer.xtb_energy = input_object.json_dict[conf]["xtb_energy"]
+            exrrho = {'xtb': 'energy_rrho_xtb', 'tm': 'energy_rrho_tm', 'orca': 'energy_rrho_orca', False: 'energy_rrho'}
+            exrrhopart = {'xtb': 'rrho_xtb', 'tm': 'rrho_tm', 'orca': 'rrho_orca', False: 'rrho'}
+            if input_object.json_dict[conf][exrrhopart[args.rrhoprog]] == "calculated":
+                conformer.rrho = input_object.json_dict[conf][exrrho[args.rrhoprog]]
+            elif not args.rrhoprog: # if rrho contribution is set to off
+                conformer.rrho = 0.0
+            if args.solv not in ('gas', None):
+                if args.gsolv2 in input_object.smgsolv2:
+                    if input_object.json_dict[conf]["sp_part2_gas"] == "calculated":
+                        conformer.energy_opt = input_object.json_dict[conf]["energy_sp_part2_gas"]
+                    exgsolv2energy = {'cosmors': 'energy_cosmo-rs', 'gbsa_gsolv': 'energy_gbsa_gsolv', 'smd_gsolv': 'energy_smd_gsolv'}
+                    exgsolv2 = {'cosmors': 'cosmo-rs'}
+                    print(exgsolv2.get(args.gsolv2, args.gsolv2))
+                    if input_object.json_dict[conf][exgsolv2.get(args.gsolv2, args.gsolv2)] == "calculated":
+                        conformer.gsolv = input_object.json_dict[conf][exgsolv2energy[args.gsolv2]]
+                elif args.sm3 in ('cosmo', 'cpcm', 'dcosmors', 'smd'): 
+                    conformer.gsolv = 0
+            else: # in gas phase
+                conformer.gsolv = 0
+            conformer.success = True
+            if not input_object.json_dict[conf]["removed_by_user"]:
+                results.append(conformer)
+    # check if results list is not empty:
+    if results:
+        # do the sorting and printing of part2:
+        results, save_errors, minfree, input_object = sorting_part23(args, results, 'part2', input_object, [])
+    else:
+        print('Error: No conformers found or file enso.json is missing!')
+    return
+
+def part2(args, results, cwd, environsettings, input_object):
     """ """
     print("-----------------------------------------------------------")
     print(" PART 2 - optimizations and low level free energy")
     print("-----------------------------------------------------------\n")
     save_errors = []
-    if args.part2 == "on":
-        digilen = 60
-        print(
-            "program: {:{digits}} {}".format(
-                "", args.prog, digits=digilen - len("program")
-            )
-        )
-        print(
-            "using ANCOPT algorithm for optimization: {:{digits}} {}".format(
-                "",
-                args.ancopt,
-                digits=digilen - len("using ANCOPT algorithm for optimization"),
-            )
-        )
-        print(
-            "functional for part2: {:{digits}} {}".format(
-                "", args.func, digits=digilen - len("functional for part2")
-            )
-        )
-        if args.solv:
-            print(
-                "solvent model for optimizations: {:{digits}} {}".format(
-                    "", args.sm, digits=digilen - len("solvent model for optimizations")
-                )
-            )
-            print(
-                "solvent model for Gsolv contribution: {:{digits}} {}".format(
+    if args.part2:
+        #print flags for part2
+        info = []
+        info.append(["prog", "program", args.prog])
+        info.append(["func", "functional for part2", args.func])
+        info.append(["ancopt", "using ANCOPT algorithm for optimization", args.ancopt])
+        if args.solv not in ('gas', None):
+            info.append(["sm", "solvent model for optimizations", args.sm])
+            info.append(["solvent", "Solvent", args.solv])
+            if args.gsolv2 not in (None, "sm"):
+                info.append(["smgsolv2", "solvent model for Gsolv contribution", args.gsolv2])
+        info.append(["prog_rrho", "program for RRHO contribution", args.rrhoprog])
+        if args.gsolv2 == 'gbsa_gsolv' or args.rrhoprog == 'xtb':
+            info.append(["gfn_version", 'GFN version for RRHO and/or GBSA_Gsolv', args.gfnv])
+        info.append(["part2_threshold", "current threshold", args.thr2])
+        optionsexchange = {True: 'on', False: 'off'}
+        for item in info:
+            if item[0] == 'justprint':
+                print(item[1:][0])
+            else:
+                option = getattr(args, input_object.key_args_dict.get(item[0], item[0]))
+                if option is True or option is False:
+                    tmpopt = optionsexchange[option]
+                else:
+                    tmpopt = option
+                if item[0] in ('sm', 'sm3', 'smgsolv2', 'sm4') and option is None:
+                    tmpopt = 'sm'
+                print("{}: {:{digits}} {}".format(
+                    item[1],
                     "",
-                    args.gsolv2,
-                    digits=digilen - len("solvent model for Gsolv contribution"),
-                )
-            )
-        print(
-            "program for RRHO contribution: {:{digits}} {}".format(
-                "", args.rrhoprog, digits=digilen - len("program for RRHO contribution")
-            )
-        )
-        print(
-            "current threshold: {:{digits}} {} kcal/mol".format(
-                "", args.thr2, digits=digilen - len("current threshold")
-            )
-        )
+                    tmpopt,
+                    digits=input_object.digilen-len(item[1])
+                    ))
+        # end print
 
         if args.prog == "tm":
             job = tm_job
@@ -10136,78 +10015,83 @@ def part2(
         # results is the list with conformers that are calculated now
         tmp_results = []
 
-        if args.part1 == "on":  # normal run
-            # use all conformers passed on from part 1
+        if args.part1:  # normal run
+            # use all conformers passed on from part1
             for item in list(results):
-                if json_dict[item.name]["opt"] == "calculated":
+                if input_object.json_dict[item.name]["opt"] == "calculated":
                     # this conformer was already calculated successfully,
                     # add energy from json_dict and move to tmp_results
-                    item.energy = json_dict[item.name]["energy_opt"]
+                    item.energy_opt = input_object.json_dict[item.name]["energy_opt"]
                     tmp_results.append(results.pop(results.index(item)))
-                elif json_dict[item.name]["opt"] == "failed":
-                    # this conformer was already calculated, but the calculation failed,
-                    # remove from results
+                elif input_object.json_dict[item.name]["opt"] == "failed":
+                    # this conformer was already calculated, but the calculation
+                    # failed, remove from results
                     print(
-                        "The calculation of part 2 failed for {} in the previous"
+                        "The calculation of part2 failed for {} in the previous"
                         " run. The conformer is sorted out.".format(item.name)
                     )
                     results.remove(item)
-                elif json_dict[item.name]["opt"] == "not_calculated":
+                elif input_object.json_dict[item.name]["opt"] == "not_calculated":
                     # this conformer has to be calculated now, stays in results
                     pass
-        elif args.part1 == "off" and not args.backup:
-            # for both, firstrun and second run; start this run with part 2 and no backup
-            # take all conformers into account that have 'consider_for_part2' set to True
-            # (default if not calculated)
-            # create tmp_results or results item for each
+        elif not args.part1 and not args.backup:
+            # for both, firstrun and second run; start this run with part2 and 
+            # no backup take all conformers into account that have 
+            # 'consider_for_part2' set to True (default if not calculated)
+            # create tmp_results or results object for each
             results = []
-            for i in range(1, args.nstruc + 1):
+            for i in range(1, args.nconf + 1):
                 conf = "".join("CONF" + str(i))
-                if json_dict[conf]["consider_for_part2"]:
-                    if json_dict[conf]["opt"] == "calculated":
+                if input_object.json_dict[conf]["consider_for_part2"]:
+                    if input_object.json_dict[conf]["opt"] == "calculated":
                         # this conformer was already calculated successfully,
                         # create tmp_results item
                         tmp = job()
                         tmp.name = conf
                         tmp.success = True
-                        tmp.energy = json_dict[conf]["energy_opt"]
+                        tmp.energy_opt = input_object.json_dict[conf]["energy_opt"]
                         tmp_results.append(tmp)
-                    elif json_dict[conf]["opt"] == "failed":
-                        # this conformer was already calculated, but the calculation failed
+                    elif input_object.json_dict[conf]["opt"] == "failed":
+                        # this conformer was already calculated
+                        # but the calculation failed
                         print(
-                            "The calculation of part 2 failed for {} in the previous run. "
-                            "The conformer is sorted out.".format(conf)
+                            "The calculation of part2 failed for {} in the "
+                            "previous run. The conformer is sorted out.".format(conf)
                         )
-                    elif json_dict[conf]["opt"] == "not_calculated":
-                        # this conformer has to be calculated now, create results environment
+                    elif input_object.json_dict[conf]["opt"] == "not_calculated":
+                        # this conformer has to be calculated now, 
+                        # create results object
                         tmp = job()
                         tmp.name = conf
                         results.append(tmp)
-        elif args.part1 == "off" and args.backup:
+        elif not args.part1 and args.backup:
             # not first run, start this run with part2 and calculate backup
             # calculate all conformers with 'backup_for_part2' = True
             results = []
-            for item in json_dict:
+            for item in input_object.json_dict:
                 if "CONF" in item:
-                    if json_dict[item]["backup_for_part2"]:
-                        if json_dict[item]["opt"] == "not_calculated":
-                            # this conformer has to be calculated now, create results item
+                    if input_object.json_dict[item]["backup_for_part2"]:
+                        if input_object.json_dict[item]["opt"] == "not_calculated":
+                            # this conformer has to be calculated now, 
+                            # create results object
                             tmp = job()
                             tmp.name = item
                             results.append(tmp)
-                        elif json_dict[item]["opt"] == "failed":
-                            # this conformer was calculated before and the calculation failed
+                        elif input_object.json_dict[item]["opt"] == "failed":
+                            # this conformer was calculated before and the 
+                            # calculation failed
                             print(
                                 "Though {} is declared as backup conformer, the "
                                 "calculation of part2 was performed before and "
                                 "failed. The conformer is sorted out.".format(item)
                             )
                         else:
-                            # this conformer was already calculated successfully, create tmp_results item
+                            # this conformer was already calculated successfully
+                            # create tmp_results object
                             tmp = job()
                             tmp.name = item
                             tmp.success = True
-                            tmp.energy = json_dict[item]["energy_opt"]
+                            tmp.energy_opt = input_object.json_dict[item]["energy_opt"]
                             tmp_results.append(tmp)
                             print(
                                 "Though {} is declared as backup conformer, the "
@@ -10216,69 +10100,70 @@ def part2(
                                 "run.".format(item)
                             )
                     elif (
-                        json_dict[item]["consider_for_part2"]
-                        and json_dict[item]["opt"] == "not_calculated"
+                        input_object.json_dict[item]["consider_for_part2"]
+                        and input_object.json_dict[item]["opt"] == "not_calculated"
                     ):
-                        # this conformer has to be calculated now, create results item
+                        # this conformer has to be calculated now, 
+                        # create results item
                         tmp = job()
                         tmp.name = item
                         results.append(tmp)
                     elif (
-                        json_dict[item]["consider_for_part2"]
-                        and json_dict[item]["opt"] == "calculated"
+                        input_object.json_dict[item]["consider_for_part2"]
+                        and input_object.json_dict[item]["opt"] == "calculated"
                     ):
                         # conformer was already calculated successfully in
                         # run without backup, create tmp_results item
                         tmp = job()
                         tmp.name = item
                         tmp.success = True
-                        tmp.energy = json_dict[item]["energy_opt"]
+                        tmp.energy_opt = input_object.json_dict[item]["energy_opt"]
                         tmp_results.append(tmp)
 
-        for item in json_dict:
+        for item in input_object.json_dict:
             if "CONF" in item:
-                if json_dict[item]["removed_by_user"]:
-                    for conf in tmp_results:
+                if input_object.json_dict[item]["removed_by_user"]:
+                    for conf in list(tmp_results):
                         if item == conf.name:
                             tmp_results.remove(conf)
                             print(
                                 "{} is removed as requested by the user!".format(item)
                             )
-                    for conf in results:
+                    for conf in list(results):
                         if item == conf.name:
                             results.remove(conf)
                             print(
                                 "{} is removed as requested by the user!".format(item)
                             )
 
-        # check if there is at least one conformer for part 2
-        if len(tmp_results) == 0 and len(results) == 0:
-            print("ERROR: There are no conformers for part 2!")
-            write_json("save_and_exit", json_dict, jsonfile)
+        # check if there is at least one conformer for part2
+        if not tmp_results and not results:
+            print("ERROR: There are no conformers for part2!")
+            input_object.write_json("save_and_exit")
         print("\nOptimization:")
         print(
             "number of further considered conformers: {:{digits}} {}".format(
                 "",
                 str(len(results) + len(tmp_results)),
-                digits=digilen - len("number of further considered conformers"),
+                digits=input_object.digilen - len("number of further considered conformers"),
             )
         )
-        if len(tmp_results) > 0:
+        if tmp_results:
             print(
                 "number of conformers which were optimized before: {:{digits}} {}".format(
                     "",
                     str(len(tmp_results)),
-                    digits=digilen
+                    digits=input_object.digilen
                     - len("number of conformers which were optimized before"),
                 )
             )
             print_block([i.name for i in tmp_results])
-            if len(results) > 0:
+            if results:
                 print(
                     "number of conformers that are optimized now: {:{digits}} {}".format(
                         "",
                         str(len(results)),
-                        digits=digilen
+                        digits=input_object.digilen
                         - len("number of conformers that are optimized now"),
                     )
                 )
@@ -10289,13 +10174,13 @@ def part2(
             print("Considered conformers:")
             print_block([i.name for i in results])
 
-        check_for_folder([i.name for i in tmp_results], args.func, args.debug)
+        check_for_folder([i.name for i in tmp_results], args.func, args.debug, input_object)
 
         # setup queues
         q = Queue()
         resultq = Queue()
 
-        if len(results) > 0:
+        if results:
             # create new folders
             print("Setting up new directories.")
             for conf in list(results):
@@ -10314,16 +10199,16 @@ def part2(
                             )
                         )
                         results.remove(conf)
-            # create coord from crest_conformers.xyz if there is no coord file in the directory CONFx/args.func
-            new_confs_list = [conf.name for conf in results]
-            conformersxyz2coord(conformersxyz, nat, args.func, new_confs_list)
+            # create coord from crest_conformers.xyz if there is no coord 
+            # file in the directory CONFx/func
+            results = conformersxyz2coord(input_object.conformersxyz, args.nat, args.func, args.nconf, results, input_object, onlyenergy=False)
             print("Constructed all folders.")
 
-            if len(results) == 0:
+            if not results:
                 print("ERROR: No conformers left!")
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
 
-            if args.part1 == "off":
+            if not args.part1:
                 instructprep = {
                     "jobtype": "prep",
                     "chrg": args.chrg,
@@ -10331,39 +10216,15 @@ def part2(
                     "func": args.func,
                     "solv": args.solv,
                     "sm": args.sm,
+                    "environ": environsettings,
                     "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
-
-                results = run_in_parallel(
-                    q, resultq, job, maxthreads, results, instructprep, args.func
-                )
-                exit_log, fail_rate = check_tasks(results, args)
-                for i in list(results):
-                    if not i.success:
-                        print(
-                            "\nERROR: A problem has occurred in the optimization "
-                            "preparation of {}! The conformer "
-                            "is removed.\n".format(i.name)
-                        )
-                        json_dict[i.name]["opt"] = "failed"
-                        json_dict[i.name]["consider_for_part3"] = False
-                        json_dict[i.name]["backup_for_part3"] = False
-                        json_dict[i.name]["energy_opt"] = None
-                        save_errors.append(
-                            "Conformer {} was removed, because preparation failed!".format(
-                                i.name
-                            )
-                        )
-                        results.remove(i)
-
-                if exit_log:
-                    print(
-                        "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                            fail_rate
-                        )
-                    )
-                    write_json("save_and_exit", json_dict, jsonfile)
-                print("Preparation completed.")
+                ifcrashed = {"opt": "failed",
+                             "consider_for_part3": False,
+                             "backup_for_part3": False,
+                             "energy_opt": None,
+                }
+                results, input_object, save_errors = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'optimization', args.func, instructprep, ifcrashed)
 
             instructopt = {
                 "jobtype": "opt",
@@ -10373,21 +10234,22 @@ def part2(
                 "solv": args.solv,
                 "sm": args.sm,
                 "full": True,
+                "environ": environsettings,
                 "progsettings": {"omp": args.omp, "tempprogpath": ""},
             }
-            if args.ancopt == "on":
+            if args.ancopt:
                 instructopt["jobtype"] = "xtbopt"
-                instructopt["progsettings"]["xtbpath"] = xtbpath
+                instructopt["progsettings"]["xtbpath"] = input_object.xtbpath
             else:
                 instructopt["jobtype"] = "opt"
             if job == tm_job:
                 instructopt["progsettings"]["tempprogpath"] = ""
             elif job == orca_job:
-                instructopt["progsettings"]["tempprogpath"] = orcapath
-                instructopt["progsettings"]["orca_old"] = orca_old
+                instructopt["progsettings"]["tempprogpath"] = input_object.orcapath
+                instructopt["progsettings"]["orca_old"] = input_object.orca_old
 
             results = run_in_parallel(
-                q, resultq, job, maxthreads, results, instructopt, args.func
+                q, resultq, job, int(args.maxthreads), results, instructopt, args.func
             )
             exit_log, fail_rate = check_tasks(results, args)
             if args.prog == "tm":  # copy control --> control_opt
@@ -10407,21 +10269,28 @@ def part2(
                         "\nERROR: A problem has occurred in the optimization of "
                         "{}! The conformer is removed.\n".format(i.name)
                     )
-                    json_dict[i.name]["opt"] = "failed"
-                    json_dict[i.name]["consider_for_part3"] = False
-                    json_dict[i.name]["backup_for_part3"] = False
-                    json_dict[i.name]["energy_opt"] = None
+                    input_object.json_dict[i.name]["opt"] = "failed"
+                    input_object.json_dict[i.name]["consider_for_part3"] = False
+                    input_object.json_dict[i.name]["backup_for_part3"] = False
+                    input_object.json_dict[i.name]["energy_opt"] = None
                     save_errors.append(
-                        "Conformer {} was removed, because optimization failed!".format(
-                            i.name
-                        )
+                        "Conformer {} was removed, because optimization "
+                        "failed!".format(i.name)
                     )
                     results.remove(i)
 
             # write energies to json_dict
             for i in results:
-                json_dict[i.name]["opt"] = "calculated"
-                json_dict[i.name]["energy_opt"] = i.energy
+                i.energy_opt = i.energy
+                i.energy = None
+                input_object.json_dict[i.name]["opt"] = "calculated"
+                input_object.json_dict[i.name]["energy_opt"] = i.energy_opt
+                if args.solv in ('gas', None): 
+                    input_object.json_dict[i.name]["sp_part2_gas"] = "calculated"
+                    input_object.json_dict[i.name]["energy_sp_part2_gas"] = i.energy_opt
+                else:
+                    input_object.json_dict[i.name]["sp_part2_solv"] = "calculated"
+                    input_object.json_dict[i.name]["energy_sp_part2_solv"] = i.energy_opt
 
             if exit_log:
                 print(
@@ -10429,70 +10298,69 @@ def part2(
                         fail_rate
                     )
                 )
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
             # always save json after optimization!
-            write_json("save", json_dict, jsonfile)
+            input_object.write_json("save")
             # end of optimization for new conformers
 
         # adding conformers calculated before to results
         try:
             length = max([len(str(item.name)) for item in tmp_results])
         except ValueError:
-            length = 4 + int(args.nstruc)
+            length = 4 + int(args.nconf)
         for item in tmp_results:
             print(
                 "Optimization energy of {:>{digits}}: {:.7f}".format(
-                    item.name, item.energy, digits=length
+                    item.name, item.energy_opt, digits=length
                 )
             )
             results.append(item)
         results.sort(key=lambda x: int(x.name[4:]))
 
-        if len(results) == 0:
+        if not results:
             print("ERROR: No conformers left!")
-            write_json("save_and_exit", json_dict, jsonfile)
+            input_object.write_json("save_and_exit")
 
-        if args.gsolv2 in ("cosmors", "gbsa_gsolv") and args.solv:
-            # optimized in implicit solvent therefore gas phase single-point needed for free energy with COSMO-RS
+        if args.gsolv2 in input_object.smgsolv2 and args.solv not in ('gas', None):
+        #if args.gsolv2 in ("cosmors", "gbsa_gsolv") and args.solv not in ('gas', None):
+            # optimized in implicit solvent therefore gas phase single-point 
+            # needed for free energy with COSMO-RS
             print("\nGSOLV")
-            print(
-                "Gas Phase Single-point at {} level,\n(to be used in combination"
-                " with the solvation correction).".format(args.func)
-            )
             tmp_results = []
             for i in list(results):
-                if json_dict[i.name]["sp_part2"] == "calculated":
-                    # this conformer was already calculated successfully, move it tmp_results
-                    i.energy = json_dict[i.name]["energy_sp_part2"]
+                if input_object.json_dict[i.name]["sp_part2_gas"] == "calculated":
+                    # this conformer was already calculated successfully, 
+                    # move it tmp_results
+                    i.energy_opt = input_object.json_dict[i.name]["energy_sp_part2_gas"]
                     tmp_results.append(results.pop(results.index(i)))
-                elif json_dict[i.name]["sp_part2"] == "failed":
-                    # this conformer was already calculated but the calculation failed, remove this conformer
+                elif input_object.json_dict[i.name]["sp_part2_gas"] == "failed":
+                    # this conformer was already calculated but the calculation 
+                    # failed, remove this conformer
                     print(
-                        "The calculation of part 1 failed for {} in the previous"
-                        " run. The conformer is sorted "
-                        "out.".format(i.name)
+                        "The calculation of single-point in part2 failed for {} in the previous"
+                        " run. The conformer is sorted out.".format(i.name)
                     )
                     results.remove(i)
-                elif json_dict[i.name]["sp_part2"] == "not_calculated":
+                elif input_object.json_dict[i.name]["sp_part2_gas"] == "not_calculated":
                     # this conformer has to be calculated now
                     pass
             print(
                 "number of further considered conformers: {:{digits}} {}".format(
                     "",
                     str(len(results) + len(tmp_results)),
-                    digits=digilen - len("number of further considered conformers"),
+                    digits=input_object.digilen - len("number of further considered conformers"),
                 )
             )
-            if len(tmp_results) > 0:
+            if tmp_results:
                 print(
                     "The gas phase single-point was already calculated for {} "
                     "conformers:".format(str(len(tmp_results)))
                 )
                 print_block([i.name for i in tmp_results])
-                if len(results) > 0:
+                if results:
                     print(
-                        "The gas phase single-point is calculated now for {} conformers:".format(
-                            str(len(results))
+                        "The gas phase single-point is calculated now for {} "
+                        "conformers:".format(str(len(results))
                         )
                     )
                     print_block([i.name for i in results])
@@ -10501,8 +10369,12 @@ def part2(
             else:
                 print("Considered conformers:")
                 print_block([i.name for i in results])
-            # calculate SP in gas phase for all conformers that remain in list results
-            if len(results) > 0:
+            print(
+                "Gas Phase Single-point at {} level,\n(to be used in combination"
+                " with the solvation correction).".format(args.func)
+            )
+            # calculate SP in gas phase for all conformers that remain in results
+            if results:
                 if args.prog == "tm":
                     for item in results:
                         try:
@@ -10520,40 +10392,15 @@ def part2(
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "environ": environsettings,
                     "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
-                results = run_in_parallel(
-                    q, resultq, job, maxthreads, results, instructprep, args.func
-                )
-                exit_log, fail_rate = check_tasks(results, args)
-
-                for i in list(results):
-                    if not i.success:
-                        print(
-                            "\nERROR: A problem has occurred in the gas phase "
-                            "single-point of {}! The conformer is "
-                            "removed.\n".format(i.name)
-                        )
-                        json_dict[i.name]["opt"] = "failed"
-                        json_dict[i.name]["consider_for_part3"] = False
-                        json_dict[i.name]["backup_for_part3"] = False
-                        json_dict[i.name]["energy_opt"] = None
-                        save_errors.append(
-                            "Conformer {} was removed, because preparation of gas"
-                            " phase single-point failed (because of COSMO-RS"
-                            ")!".format(i.name)
-                        )
-                        results.remove(i)
-
-                if exit_log:
-                    print(
-                        "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                            fail_rate
-                        )
-                    )
-                    write_json("save_and_exit", json_dict, jsonfile)
-                print("Preparation completed.")
-
+                ifcrashed = {"sp_part2_gas": "failed", 
+                            "energy_sp_part2_gas": None,
+                            "consider_for_part3": False,
+                            "backup_for_part3": False,
+                            }
+                results, input_object, save_errors = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'gas phase single-point', args.func, instructprep, ifcrashed)
                 if args.prog == "tm":
                     for item in results:
                         try:
@@ -10572,16 +10419,17 @@ def part2(
                     "func": args.func,
                     "solv": args.solv,
                     "sm": "gas",
+                    "environ": environsettings,
                     "progsettings": {"omp": args.omp, "tempprogpath": ""},
                 }
                 if job == tm_job:
                     instructsp["progsettings"]["tempprogpath"] = ""
                 elif job == orca_job:
-                    instructsp["progsettings"]["tempprogpath"] = orcapath
-                    instructsp["progsettings"]["orca_old"] = orca_old
+                    instructsp["progsettings"]["tempprogpath"] = input_object.orcapath
+                    instructsp["progsettings"]["orca_old"] = input_object.orca_old
 
                 results = run_in_parallel(
-                    q, resultq, job, maxthreads, results, instructsp, args.func
+                    q, resultq, job, int(args.maxthreads), results, instructsp, args.func
                 )
                 exit_log, fail_rate = check_tasks(results, args)
 
@@ -10603,27 +10451,27 @@ def part2(
                             "calculation of {}! The conformer is "
                             "removed.\n".format(i.name)
                         )
-                        json_dict[i.name]["sp_part2"] = "failed"
-                        json_dict[i.name]["consider_for_part3"] = False
-                        json_dict[i.name]["backup_for_part3"] = False
-                        json_dict[i.name]["energy_sp_part2"] = None
+                        input_object.json_dict[i.name]["sp_part2_gas"] = "failed"
+                        input_object.json_dict[i.name]["energy_sp_part2_gas"] = None
+                        input_object.json_dict[i.name]["consider_for_part3"] = False
+                        input_object.json_dict[i.name]["backup_for_part3"] = False
                         save_errors.append(
-                            "Error in single-point calculation for conformer {}".format(
-                                i.name
-                            )
+                            "Error in single-point calculation for "
+                            "conformer {}".format(i.name)
                         )
                         results.remove(i)
                 for i in results:
-                    json_dict[i.name]["sp_part2"] = "calculated"
-                    json_dict[i.name]["energy_sp_part2"] = i.energy
+                    i.energy_opt = i.energy
+                    i.energy = None
+                    input_object.json_dict[i.name]["sp_part2_gas"] = "calculated"
+                    input_object.json_dict[i.name]["energy_sp_part2_gas"] = i.energy_opt
 
                 if exit_log:
                     print(
-                        "\nERROR: too many single-point calculations failed ({:.2f} %)!".format(
-                            fail_rate
-                        )
+                        "\nERROR: too many single-point calculations "
+                        "failed ({:.2f} %)!".format(fail_rate)
                     )
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
 
             else:  # all conformers were calculated before
                 results = []
@@ -10631,23 +10479,23 @@ def part2(
             try:
                 length = max([len(str(i.name)) for i in tmp_results])
             except ValueError:
-                length = 4 + int(args.nstruc)
+                length = 4 + int(args.nconf)
             for item in tmp_results:
                 print(
                     "single-point energy of {:{digits}}: {:.7f}".format(
-                        item.name, item.energy, digits=length
+                        item.name, item.energy_opt, digits=length
                     )
                 )
                 results.append(item)
             results.sort(key=lambda x: int(x.name[4:]))
 
             # check if at least one conformer is left:
-            if len(results) == 0:
+            if not results:
                 print("ERROR: No conformers left!")
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
 
-            # calculate only GBSA-Gsolv or COSMO-RS
-            results = additive_gsolv(
+            # calculate only additive solvation: GBSA-Gsolv or COSMO-RS smd_gsolv
+            results, input_object = additive_gsolv(
                 args,
                 q,
                 resultq,
@@ -10655,142 +10503,45 @@ def part2(
                 True,
                 False,
                 results,
-                json_dict,
-                jsonfile,
+                input_object,
                 save_errors,
-                digilen,
+                cwd,
+                environsettings
             )
             #
-        elif args.gsolv2 not in ("cosmors", "gbsa_gsolv") and args.solv:
+        elif args.gsolv2 not in input_object.smgsolv2 and args.solv not in ('gas', None):
             print("Gsolv values are included in the optimizations.")
-        elif not args.solv:
+            for conf in results:
+                conf.gsolv = 0.0
+        elif args.solv in ('gas', None):
             print("Since calculation is in the gas phase, Gsolv is not required.")
-        if not args.rrhoprog == "off":
-            # run RRHO
-            results, save_errors = rrho_part23(
-                args,
-                q,
-                resultq,
-                job,
-                True,
-                False,
-                results,
-                json_dict,
-                jsonfile,
-                save_errors,
-                digilen,
-                cwd,
-            )
-        else:
+            for conf in results:
+                conf.gsolv = 0.0
+        if not args.rrhoprog:
             # skipp RRHO calculation:
             for conf in results:
                 conf.rrho = 0.0
             # enso.json will not be updated with rrho information!
-        for i in results:  # calculate free energy
-            if (
-                i.energy is not None
-                and i.rrho is not None
-                and isinstance(i.gsolv, float)
-            ):
-                i.free_energy = i.energy + i.gsolv + i.rrho
-            else:
-                # something went wrong and we do not know what, so reset everything
-                print(
-                    "The conformer {} was removed because the free energy could "
-                    "not be calculated! {}: energy: {}, rrho: {}, gsolv: {}.".format(
-                        i.name, i.name, i.energy, i.rrho, i.gsolv
-                    )
-                )
-                json_dict[i.name]["consider_for_part2"] = False
-                json_dict[i.name]["energy_opt"] = None
-                json_dict[i.name]["sp_part2"] = "failed"
-                json_dict[i.name]["energy_sp_part2"] = None
-                if args.gsolv2 == "cosmors" and args.solv:
-                    json_dict[i.name]["cosmo-rs"] = "failed"
-                    json_dict[i.name]["energy_cosmo-rs"] = None
-                elif args.gsolv2 == "gbsa_gsolv" and args.solv:
-                    json_dict[i.name]["gbsa_gsolv"] = "failed"
-                    json_dict[i.name]["energy_gbsa_gsolv"] = None
-                json_dict[i.name]["rrho"] = "failed"
-                json_dict[i.name]["energy_rrho"] = None
-                json_dict[i.name]["consider_for_part3"] = False
-                json_dict[i.name]["backup_for_part3"] = False
-                save_errors.append(
-                    "Error in summing up free energy for conformer {}".format(i.name)
-                )
-                results.remove(i)
-
-        # evaluate calculated energies
-        try:
-            min2 = min(
-                [item.free_energy for item in results if item.free_energy is not None]
+        else:
+            # run RRHO
+            results, input_object, save_errors = rrho_part23(
+                args,
+                q,
+                resultq,
+                job,
+                True,
+                False,
+                results,
+                input_object,
+                save_errors,
+                cwd,
+                environsettings
             )
-        except:
-            print("\nERROR: no value to calculate difference from PART2!")
-            write_json("save_and_exit", json_dict, jsonfile)
-
-        for item in results:
-            if item.success:
-                try:
-                    item.rel_free_energy = float(
-                        "{:.2f}".format((item.free_energy - min2) * 627.50947428)
-                    )
-                except ValueError:
-                    print(
-                        "Could not calculate relative free energy for conformer "
-                        "{}. rel free energy is set to a "
-                        "very high number!".format(item.name)
-                    )
-                    item.rel_free_energy = 1000.00
-
-        # check if at least one calculation was successful
-        if len(results) == 0:
-            print("ERROR: No conformers left!")
-            write_json("save_and_exit", json_dict, jsonfile)
-
-        print("\n*********************************")
-        print("* {:^29} *".format("Gibbs free energies of part 2"))
-        print("*********************************")
-        try:
-            length = max([len(str(i.name)) for i in results])
-        except ValueError:
-            length = 4 + int(args.nstruc)
-        print(
-            "{:{digits}}  {:12}    Gsolv [Eh]   RRHO [Eh]    Gtot [Eh]    rel. Gtot [kcal/mol]]\n".format(
-                "CONF#", "E [Eh]", digits=length
-            )
-        )
-        lowestfree = min(
-            [item.free_energy for item in results if item.free_energy is not None]
-        )
-        for i in results:
-            if i.free_energy != lowestfree:
-                print(
-                    "{:{digits}}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
-                        i.name,
-                        i.energy,
-                        i.gsolv,
-                        i.rrho,
-                        i.free_energy,
-                        i.rel_free_energy,
-                        digits=length,
-                    )
-                )
-            else:
-                print(
-                    "{:{digits}}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f} <----- lowest".format(
-                        i.name,
-                        i.energy,
-                        i.gsolv,
-                        i.rrho,
-                        i.free_energy,
-                        i.rel_free_energy,
-                        digits=length,
-                    )
-                )
+        #sorting for part2 on low level free energy basis:
+        results, save_errors, minfree, input_object = sorting_part23(args, results, 'part2', input_object, save_errors)
 
         ### check if conformers are rotamers or identical, possibly sort them out
-        rotdict = crest_routine(results, args.func, args.crestcheck, json_dict)
+        rotdict = crest_routine(args, results, args.func, args.crestcheck, input_object.json_dict, input_object.crestpath, environsettings)
         results.sort(key=lambda x: int(x.name[4:]))
         # evaluate which conformers to consider further
         # energy from part2 should be smaller than threshold
@@ -10802,23 +10553,23 @@ def part2(
         for item in list(results):
             if item.rel_free_energy is not None and item.rel_free_energy <= args.thr2:
                 tmp_consider.append(item.name)
-                json_dict[item.name]["consider_for_part3"] = True
-                json_dict[item.name]["backup_for_part3"] = False
+                input_object.json_dict[item.name]["consider_for_part3"] = True
+                input_object.json_dict[item.name]["backup_for_part3"] = False
             elif (
                 item.rel_free_energy is not None
                 and args.thr2 < item.rel_free_energy <= (args.thr2 + 2)
             ):
-                json_dict[item.name]["consider_for_part3"] = False
-                json_dict[item.name]["backup_for_part3"] = True
+                input_object.json_dict[item.name]["consider_for_part3"] = False
+                input_object.json_dict[item.name]["backup_for_part3"] = True
                 backuplist2.append(item)
                 results.remove(item)
             else:
-                json_dict[item.name]["consider_for_part3"] = False
-                json_dict[item.name]["backup_for_part3"] = False
+                input_object.json_dict[item.name]["consider_for_part3"] = False
+                input_object.json_dict[item.name]["backup_for_part3"] = False
                 results.remove(item)
         print_block(tmp_consider)
 
-        if len(backuplist2) >= 1:
+        if backuplist2:
             print("\n**********************")
             print("* backup conformers  *")
             print("**********************")
@@ -10838,20 +10589,19 @@ def part2(
                         float(item.rel_free_energy),
                     )
                 )
+        input_object.write_json("save")
 
-        write_json("save", json_dict, jsonfile)
-
-        if len(save_errors) > 0:
+        if save_errors:
             print("***---------------------------------------------------------***")
             print("Printing most relevant errors again, just for user convenience:")
             for error in list(save_errors):
                 print(save_errors.pop())
             print("***---------------------------------------------------------***")
 
-        print("\n END of part2.\n")
-    else:  # if part 2 is switched off
+        print("\nEND of part2.\n")
+    else:  # if part2 is switched off
         print("PART2 has been skipped by user!")
-        print("Reading from file {} if necessary.\n".format(jsonfile))
+        print("Reading from file {} if necessary.\n".format(input_object.jsonfile))
         try:
             results
         except NameError:
@@ -10860,56 +10610,92 @@ def part2(
             rotdict
         except NameError:
             rotdict = []
-    return results, json_dict, rotdict
+    return results, input_object, rotdict
 
 
-def part3(
-    args, results, jsonfile, cwd, json_dict, maxthreads, xtbpath, environsettings
-):
-    """ """
+def printout_part3(args, input_object):
+    """ printout of part1 only based on enso.json, no calculation!"""
+    print("\n-----------------------------------------------------------")
+    print("        PRINTOUT of PART3 - high level free energy")
+    print("-----------------------------------------------------------")
+    results = []
+    # create results of all converged crude dft optimizations:
+    for i in range(1, args.nconf + 1):
+        conf = "".join("CONF" + str(i))
+        if input_object.json_dict[conf]["opt"] == "calculated" and input_object.json_dict[conf]["sp_part3"] == "calculated":
+            # this conformer was calculated successfully before
+            conformer = qm_job()
+            conformer.name = conf
+            conformer.energy_opt = input_object.json_dict[conf]["energy_opt"]
+            conformer.xtb_energy = input_object.json_dict[conf]["xtb_energy"]
+            conformer.sp3_energy = input_object.json_dict[conf]["energy_sp_part3"]
+            exrrho = {'xtb': 'energy_rrho_xtb', 'tm': 'energy_rrho_tm', 'orca': 'energy_rrho_orca', False: 'energy_rrho'}
+            exrrhopart = {'xtb': 'rrho_xtb', 'tm': 'rrho_tm', 'orca': 'rrho_orca', False: 'rrho'}
+            if input_object.json_dict[conf][exrrhopart[args.rrhoprog]] == "calculated":
+                conformer.rrho = input_object.json_dict[conf][exrrho[args.rrhoprog]]
+            elif not args.rrhoprog:
+                conformer.rrho = 0.0
+            if args.solv not in ('gas', None):
+                if args.sm3 in input_object.smgsolv2:
+                    if input_object.json_dict[conf]["sp_part3_gas"] == "calculated":
+                        conformer.sp3_energy = input_object.json_dict[conf]["energy_sp_part3_gas"]
+                    exgsolv2energy = {'cosmors': 'energy_cosmo-rs', 'gbsa_gsolv': 'energy_gbsa_gsolv', 'smd_gsolv': 'energy_smd_gsolv'}
+                    exsm = {'cosmors': 'cosmo-rs'}
+                    if input_object.json_dict[conf][exsm.get(args.sm3, args.sm4)] == "calculated":
+                        conformer.gsolv = input_object.json_dict[conf][exgsolv2energy[args.sm3]]
+                elif args.sm3 in ('cosmo', 'cpcm', 'dcosmors', 'smd'): 
+                    conformer.gsolv = 0
+            else: # in gas phase
+                conformer.gsolv = 0
+            conformer.success = True
+            if not input_object.json_dict[conf]["removed_by_user"]:
+                results.append(conformer)
+    # check if results list is not empty:
+    if results:
+        # do the sorting and printing of part3:
+        results, save_errors, minfree, input_object = sorting_part23(args, results, 'part3', input_object, [])
+    else:
+        print('Error: No conformers found or file enso.json is missing!')
+    return
+
+def part3(args, results, cwd, environsettings, input_object):
+    """Calculation of Boltzmann weights through high level free energy calculation """
     save_errors = []
     print("-----------------------------------------------------------")
     print(" PART 3 - high level free energy calculation")
     print("-----------------------------------------------------------\n")
-    if args.part3 == "on":
-        digilen = 60
-        print(
-            "program for single-point: {:{digits}} {}".format(
-                "", str(args.prog), digits=digilen - len("program for single-point")
-            )
-        )
-        print(
-            "functional for part 3: {:{digits}} {}".format(
-                "", args.func3, digits=digilen - len("functional for part 3")
-            )
-        )
-        if args.func3 == "dsd-blyp" and args.basis3 != "def2-TZVPP":
-            print("WARNING: only def2-TZVPP is available with DSD-BLYP!")
-            args.basis3 = "def2-TZVPP"
-        print(
-            "basis set for part 3: {:{digits}} {}".format(
-                "", args.basis3, digits=digilen - len("basis set for part 3")
-            )
-        )
-        print(
-            "program for RRHO contribution: {:{digits}} {}".format(
-                "", args.rrhoprog, digits=digilen - len("program for RRHO contribution")
-            )
-        )
-        if args.rrhoprog == "xtb":
-            # os.environ["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
-            environsettings["OMP_NUM_THREADS"] = "{:d}".format(args.omp)
-            print(
-                "number of cores used by xtb: {:{digits}} {}".format(
-                    "", args.omp, digits=digilen - len("number of cores used by xtb")
-                )
-            )
-        if args.solv:
-            print(
-                "solvent model: {:{digits}} {}".format(
-                    "", args.sm3, digits=digilen - len("solvent model")
-                )
-            )
+    if args.part3:
+        #print flags for part3
+        info = []
+        info.append(["prog3", "program for single-points", args.prog3])
+        info.append(["func3", "functional for part3", args.func3])
+        info.append(["basis3", "basis set for part3", args.basis3])
+        if args.solv not in ('gas', None):
+            info.append(["sm3", "solvent model", args.sm3])
+            info.append(["solvent", "Solvent", args.solv])
+        info.append(["prog_rrho", "program for RRHO contribution", args.rrhoprog])
+        if args.sm3 == 'gbsa_gsolv' or args.rrhoprog == 'xtb':
+            info.append(["gfn_version", 'GFN version for RRHO and/or GBSA_Gsolv', args.gfnv])
+        optionsexchange = {True: 'on', False: 'off'}
+        for item in info:
+            if item[0] == 'justprint':
+                print(item[1:][0])
+            else:
+                option = getattr(args, input_object.key_args_dict.get(item[0], item[0]))
+                if option is True or option is False:
+                    tmpopt = optionsexchange[option]
+                else:
+                    tmpopt = option
+                if item[0] in ('sm', 'sm3', 'smgsolv2', 'sm4') and option is None:
+                    tmpopt = 'sm'
+                print("{}: {:{digits}} {}".format(
+                    item[1],
+                    "",
+                    tmpopt,
+                    digits=input_object.digilen-len(item[1])
+                    ))
+        print("")
+        # end print
 
         if not args.boltzmann:
             print("\nSingle-points")
@@ -10918,216 +10704,238 @@ def part3(
         elif args.prog3 == "orca":
             job = orca_job
 
-        if args.part2 == "on":
+        if args.part2:
             # normal run or backup run
-            # use all conformers passed on from part 1
+            # use all conformers passed on from part2
             tmp_results = []
-            # list of conformers calculated before, results is the list with conformers that are calculated now
+            # tmp_results = list of conformers calculated before, 
+            # results is the list with conformers that are calculated now
             for item in list(results):
-                if json_dict[item.name]["sp_part3"] == "calculated":
-                    # this conformer was already calculated successfully, add energy from json_dict
-                    # and move to tmp_results
-                    item.energy = json_dict[item.name]["energy_sp_part3"]
+                if input_object.json_dict[item.name]["sp_part3"] == "calculated":
+                    # this conformer was already calculated successfully, 
+                    # add sp3_energy from json_dict and move to tmp_results
+                    item.sp3_energy = input_object.json_dict[item.name]["energy_sp_part3"]
                     tmp_results.append(results.pop(results.index(item)))
-                elif json_dict[item.name]["sp_part3"] == "failed":
-                    # this conformer was already calculated, but the calculation failed, remove from results
+                elif input_object.json_dict[item.name]["sp_part3"] == "failed":
+                    # this conformer was already calculated, but the 
+                    # calculation failed, remove from results
                     print(
-                        "The calculation of part 3 failed for {} in the previous run. The conformer is sorted "
-                        "out.".format(item.name)
+                        "The calculation of part3 failed for {} in the previous"
+                        " run. The conformer is sorted out.".format(item.name)
                     )
                     results.remove(item)
-                elif json_dict[item.name]["sp_part3"] == "not_calculated":
+                elif input_object.json_dict[item.name]["sp_part3"] == "not_calculated":
                     # this conformer has to be calculated now, stays in results
                     pass
             if args.backup:
                 # add backup conformers
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["backup_for_part3"]:
-                        if json_dict[item]["sp_part3"] == "not_calculated":
-                            # this conformer has to be calculated now, create results item
-                            tmp = job()
-                            tmp.name = item
-                            results.append(tmp)
-                        elif json_dict[item]["backup_for_part3"] == "failed":
-                            # this conformer was calculated before and the calculation failed
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["backup_for_part3"]:
+                        if input_object.json_dict[item]["sp_part3"] == "not_calculated":
+                            # this conformer has to be calculated now, 
+                            # create results object
+                            backup = job()
+                            backup.name = item
+                            results.append(backup)
+                        elif input_object.json_dict[item]["backup_for_part3"] == "failed":
+                            # this conformer was calculated before and the 
+                            # calculation failed
                             print(
-                                "Though {} is declared as backup conformer, the calculation of part3 was performed "
-                                "before and failed. The conformer is sorted out.".format(
-                                    item
-                                )
+                                "Though {} is declared as backup conformer, the "
+                                "calculation of part3 was performed before and "
+                                "failed. The conformer is sorted out.".format(
+                                item)
                             )
-                        elif json_dict[item]["sp_part3"] == "calculated":
-                            # this conformer was already calculated successfully, create tmp_results item
-                            tmp = job()
-                            tmp.name = item
-                            tmp.success = True
-                            tmp.energy = json_dict[item]["energy_sp_part3"]
-                            tmp_results.append(tmp)
+                        elif input_object.json_dict[item]["sp_part3"] == "calculated":
+                            # this conformer was already calculated successfully,
+                            # create tmp_results object
+                            prevsuccess = job()
+                            prevsuccess.name = item
+                            prevsuccess.success = True
+                            prevsuccess.sp3_energy = input_object.json_dict[item]["energy_sp_part3"]
+                            tmp_results.append(prevsuccess)
                             print(
-                                "Though {} is declared as backup conformer, the calculation of part3 was performed "
-                                "before. Using the energy from the previous run.".format(
-                                    item
-                                )
+                                "Though {} is declared as backup conformer, the "
+                                "calculation of part3 was performed before. Using "
+                                "the energy from the previous run.".format(
+                                    item)
                             )
-        elif args.part2 == "off" and not args.boltzmann:
-            # part 2 is off
-            if firstrun:
-                # not possible
+        elif not args.part2 and not args.boltzmann:
+            # part2 is off
+            if input_object.firstrun:
+                # not possible 
+                # would be part3 on unoptimized geometries
                 print(
-                    "ERROR: Part 2 is switched off but the file {} containing all information of the previous run "
-                    "cannot be found!".format(jsonfile)
+                    "ERROR: Part 2 is switched off but the file {} containing "
+                    "all information of the previous run cannot be found!".format(input_object.jsonfile)
                 )
-                write_json("save_and_exit", json_dict, jsonfile)
-            # normal restart
-            # take all conformers into account that have 'consider_for_part3' set to True (default is False)
-            # create tmp_results or results item for each
+                input_object.write_json("save_and_exit")
+            # normal RESTART!
+            # take all conformers into account that have 'consider_for_part3' = True
+            # create tmp_results or results object for each conformer
             results = []
             tmp_results = []
-            # list of conformers calculated before, results is the list with conformers that are calculated now
-            for item in json_dict:
-                if "CONF" in item and json_dict[item]["consider_for_part3"]:
-                    if json_dict[item]["sp_part3"] == "calculated":
-                        # this conformer was already calculated successfully, create tmp_results item
-                        tmp = job()
-                        tmp.name = item
-                        tmp.success = True
-                        tmp.energy = json_dict[item]["energy_sp_part3"]
-                        tmp_results.append(tmp)
-                    elif json_dict[item]["sp_part3"] == "failed":
-                        # this conformer was already calculated, but the calculation failed
+            # tmp_results = list of conformers calculated before
+            # results is the list with conformers that are calculated now
+            for item in input_object.json_dict:
+                if "CONF" in item and input_object.json_dict[item]["consider_for_part3"]:
+                    if input_object.json_dict[item]["sp_part3"] == "calculated":
+                        # this conformer was already calculated successfully
+                        # create tmp_results object
+                        prevsuccess = job()
+                        prevsuccess.name = item
+                        prevsuccess.success = True
+                        prevsuccess.sp3_energy = input_object.json_dict[item]["energy_sp_part3"]
+                        tmp_results.append(prevsuccess)
+                    elif input_object.json_dict[item]["sp_part3"] == "failed":
+                        # this conformer was already calculated, 
+                        # but the calculation failed
                         print(
-                            "The calculation of part 3 failed for {} in the previous run. The conformer is sorted "
-                            "out.".format(item)
+                            "The calculation of part3 failed for {} in the "
+                            "previous run. The conformer is sorted out.".format(item)
                         )
-                    elif json_dict[item]["sp_part3"] == "not_calculated":
-                        # this conformer has to be calculated now, create results environment
-                        tmp = job()
-                        tmp.name = item
-                        results.append(tmp)
+                    elif input_object.json_dict[item]["sp_part3"] == "not_calculated":
+                        # this conformer has to be calculated now, 
+                        # create results object
+                        new = job()
+                        new.name = item
+                        results.append(new)
             if args.backup:
                 # add backup conformers
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["backup_for_part3"]:
-                        if json_dict[item]["sp_part3"] == "not_calculated":
-                            # this conformer has to be calculated now, create results item
-                            tmp = job()
-                            tmp.name = item
-                            results.append(tmp)
-                        elif json_dict[item]["backup_for_part3"] == "failed":
-                            # this conformer was calculated before and the calculation failed
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["backup_for_part3"]:
+                        if input_object.json_dict[item]["sp_part3"] == "not_calculated":
+                            # this conformer has to be calculated now,
+                            # create results object
+                            backup = job()
+                            backup.name = item
+                            results.append(backup)
+                        elif input_object.json_dict[item]["backup_for_part3"] == "failed":
+                            # this conformer was calculated before and the 
+                            # calculation failed
+                            # --> not included in results or tmp_results
                             print(
-                                "Though {} is declared as backup conformer, the calculation of part3 was performed "
-                                "before and failed. The conformer is sorted out.".format(
+                                "Though {} is declared as backup conformer, the "
+                                "calculation of part3 was performed before and "
+                                "failed. The conformer is sorted out.".format(
                                     item
                                 )
                             )
-                        elif json_dict[item]["sp_part3"] == "calculated":
-                            # this conformer was already calculated successfully, create tmp_results item
-                            tmp = job()
-                            tmp.name = item
-                            tmp.success = True
-                            tmp.energy = json_dict[item]["energy_sp_part3"]
-                            tmp_results.append(tmp)
+                        elif input_object.json_dict[item]["sp_part3"] == "calculated":
+                            # this conformer was already calculated successfully
+                            # create tmp_results object
+                            backupsuccess = job()
+                            backupsuccess.name = item
+                            backupsuccess.success = True
+                            backupsuccess.sp3_energy = input_object.json_dict[item]["energy_sp_part3"]
+                            tmp_results.append(backupsuccess)
                             print(
-                                "Though {} is declared as backup conformer, the calculation of part3 was performed "
-                                "before. Using the energy from the previous run.".format(
-                                    item
-                                )
+                                "Though {} is declared as backup conformer, the "
+                                "calculation of part3 was performed before. Using"
+                                " the energy from the previous run.".format(
+                                    item)
                             )
         if args.boltzmann:
-            # take all conformers into account that have consider_for_part3 = True and all required energies
+            # only reevaluation of boltzmann weights! 
+            # take all conformers into account that have 
+            # consider_for_part3 = True and all required energies
             results = []
-            tmp_results = []
-            if args.sm3 in ("cosmors", "gbsa_gsolv") and args.solv:
+            tmp_results = [] # not filled but needed for evaluation!
+            if args.solv not in (None, 'gas') and args.sm3 in input_object.smgsolv2:
                 if args.sm3 == "cosmors":
                     js_smodel = "cosmo-rs"
                     js_sm_energy = "energy_cosmo-rs"
                 elif args.sm3 == "gbsa_gsolv":
                     js_smodel = "gbsa_gsolv"
                     js_sm_energy = "energy_gbsa_gsolv"
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["consider_for_part3"]:
+                elif args.sm3 == "smd_gsolv":
+                    js_smodel = "smd_gsolv"
+                    js_sm_energy = "energy_smd_gsolv"
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["consider_for_part3"]:
                         if (
-                            json_dict[item]["sp_part3"] == "calculated"
-                            and json_dict[item]["rrho"] == "calculated"
-                            and json_dict[item][js_smodel] == "calculated"
+                            input_object.json_dict[item]["sp_part3"] == "calculated"
+                            and input_object.json_dict[item]["rrho"] == "calculated"
+                            and input_object.json_dict[item][js_smodel] == "calculated"
                         ):
-                            tmp = job()
-                            tmp.name = item
-                            tmp.success = True
-                            tmp.energy = json_dict[item]["energy_sp_part3"]
-                            tmp.rrho = json_dict[item]["energy_rrho"]
-                            tmp.gsolv = json_dict[item][js_sm_energy]
-                            results.append(tmp)
-            else:
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["consider_for_part3"]:
+                            conf = job()
+                            conf.name = item
+                            conf.success = True
+                            conf.sp3_energy = input_object.json_dict[item]["energy_sp_part3"]
+                            conf.rrho = input_object.json_dict[item]["energy_rrho"]
+                            conf.gsolv = input_object.json_dict[item][js_sm_energy]
+                            conf.degeneracy = input_object.json_dict[item]["degeneracy"]
+                            results.append(conf)
+            else: # in gas phase
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["consider_for_part3"]:
                         if (
-                            json_dict[item]["sp_part3"] == "calculated"
-                            and json_dict[item]["rrho"] == "calculated"
+                            input_object.json_dict[item]["sp_part3"] == "calculated"
+                            and input_object.json_dict[item]["rrho"] == "calculated"
                         ):
-                            tmp = job()
-                            tmp.name = item
-                            tmp.success = True
-                            tmp.energy = json_dict[item]["energy_sp_part3"]
-                            tmp.rrho = json_dict[item]["energy_rrho"]
-                            tmp.gsolv = 0.0
-                            results.append(tmp)
-        for item in json_dict:
+                            conf = job()
+                            conf.name = item
+                            conf.success = True
+                            conf.sp3_energy = input_object.json_dict[item]["energy_sp_part3"]
+                            conf.rrho = input_object.json_dict[item]["energy_rrho"]
+                            conf.gsolv = 0.0
+                            conf.degeneracy = input_object.json_dict[item]["degeneracy"]
+                            results.append(conf)
+        #END if boltzmann #
+        for item in input_object.json_dict:
             if "CONF" in item:
-                if json_dict[item]["removed_by_user"]:
-                    for conf in tmp_results:
+                if input_object.json_dict[item]["removed_by_user"]:
+                    for conf in list(tmp_results):
                         if item == conf.name:
                             tmp_results.remove(conf)
                             print(
                                 "{} is removed as requested by the user!".format(item)
                             )
-                    for conf in results:
+                    for conf in list(results):
                         if item == conf.name:
                             results.remove(conf)
                             print(
                                 "{} is removed as requested by the user!".format(item)
                             )
-        # check if there is at least one conformer for part 3
-        if len(tmp_results) == 0 and len(results) == 0:
-            print("ERROR: There are no conformers left for part 3!")
-            write_json("save_and_exit", json_dict, jsonfile)
+        # check if there is at least one conformer for part3
+        if not tmp_results and not results:
+            print("ERROR: There are no conformers left for part3!")
+            input_object.write_json("save_and_exit")
         elif (len(tmp_results) + len(results)) == 1:
             print(
-                "There is only one conformer left. Part 3 is skipped and Part 4 is calculated directly."
+                "There is only one conformer left. Part3 is skipped and "
+                "Part4 is calculated directly."
             )
-            for (
-                i
-            ) in (
-                tmp_results
-            ):  # the conformer could either be in results or in tmp_results
+            # the conformer could either be in results or in tmp_results
+            for i in list(tmp_results):  
                 results.append(i)
-            for i in results:
-                if not i.energy:
-                    i.energy = 0.0
-                if not i.gsolv:
-                    i.gsolv = 0.0
-                if not i.rrho:
-                    i.rrho = 0.0
-                i.bm_weight = 1.00
-                i.new_bm_weight = 1.00
-                json_dict[i.name]["consider_for_part4"] = True
-        else:
+                tmp_results.pop()
+            for conf in results:
+                if not conf.sp3_energy:
+                    conf.sp3_energy = 0.0
+                if not conf.gsolv:
+                    conf.gsolv = 0.0
+                if not conf.rrho:
+                    conf.rrho = 0.0
+                conf.bm_weight = 1.00
+                conf.new_bm_weight = 1.00
+                input_object.json_dict[conf.name]["consider_for_part4"] = True
+        else: # start calculations:
             print(
                 "number of further considered conformers: {:{digits}} {}".format(
                     "",
                     str(len(results) + len(tmp_results)),
-                    digits=digilen - len("number of further considered conformers"),
+                    digits=input_object.digilen - len("number of further considered conformers"),
                 )
             )
-            if len(tmp_results) > 0:
+            if tmp_results:
                 print(
                     "The single-point was calculated for {} conformers before:".format(
                         str(len(tmp_results))
                     )
                 )
                 print_block([i.name for i in tmp_results])
-                if len(results) > 0:
+                if results:
                     print(
                         "The single-point is calculated for {} conformers now:".format(
                             str(len(results))
@@ -11139,19 +10947,23 @@ def part3(
             else:
                 print("Considered conformers:")
                 print_block([i.name for i in results])
+
             if not args.boltzmann:
+                # normal evaluation and calculation
                 # check if directories of conformers calculated before exist,
-                check_for_folder([i.name for i in tmp_results], args.func, args.debug)
+                check_for_folder([i.name for i in tmp_results], args.func, args.debug, input_object)
 
                 # setup queues
                 q = Queue()
                 resultq = Queue()
 
                 if results:
-                    # create new folder and copy coord from CONFx/args.func to CONFx/args.func3
+                    # create new folder and copy coord from CONFx/func 
+                    # to CONFx/func3
                     print("Setting up new directories.")
                     if not args.func == args.func3:
-                        # if args.func == args.func3 no new directory or copying of file coord is needed
+                        # if args.func == args.func3 no new directory or 
+                        # copying of file coord is needed
                         for conf in list(results):
                             tmp_from = os.path.join(cwd, conf.name, args.func)
                             tmp_to = os.path.join(cwd, conf.name, args.func3)
@@ -11165,19 +10977,24 @@ def part3(
                             except FileNotFoundError:
                                 if not os.path.isfile(os.path.join(tmp_from, "coord")):
                                     print(
-                                        "ERROR: while copying the coord file from {}! The corresponding "
+                                        "ERROR: while copying the coord file "
+                                        "from {}! The corresponding "
                                         "file does not exist.".format(tmp_from)
                                     )
                                 elif not os.path.isdir(tmp_to):
                                     print(
-                                        "ERROR: Could not create folder {}!".format(
-                                            tmp_to
-                                        )
+                                        "ERROR: Could not create folder"
+                                        " {}!".format(tmp_to)
                                     )
                                 print("ERROR: Removing conformer {}!".format(conf.name))
-                                json_dict[conf.name]["sp_part3"] = "failed"
-                                json_dict[conf.name]["consider_for_part4"] = False
-                                json_dict[conf.name]["energy_sp_part3"] = None
+                                input_object.json_dict[conf.name]["sp_part3"] = "failed"
+                                ###CHECK
+                                if args.solv in ("gas", None):
+                                    input_object.json_dict[conf.name]["sp_part3_gas"] = "failed"
+                                else:
+                                    input_object.json_dict[conf.name]["sp_part3_solv"] = "failed"
+                                input_object.json_dict[conf.name]["consider_for_part4"] = False
+                                input_object.json_dict[conf.name]["energy_sp_part3"] = None
                                 save_errors.append(
                                     "Conformer {} was removed, because IO failed!".format(
                                         conf.name
@@ -11196,20 +11013,25 @@ def part3(
                                     )
                                 )
                                 print("ERROR: Removing conformer {}!".format(conf.name))
-                                json_dict[conf.name]["sp_part3"] = "failed"
-                                json_dict[conf.name]["consider_for_part4"] = False
-                                json_dict[conf.name]["energy_sp_part3"] = None
+                                input_object.json_dict[conf.name]["sp_part3"] = "failed"
+                                ###CHECK
+                                if args.solv in ("gas", None):
+                                    input_object.json_dict[conf.name]["sp_part3_gas"] = "failed"
+                                else:
+                                    input_object.json_dict[conf.name]["sp_part3_solv"] = "failed"
+                                input_object.json_dict[conf.name]["consider_for_part4"] = False
+                                input_object.json_dict[conf.name]["energy_sp_part3"] = None
                                 save_errors.append(
                                     "Conformer {} was removed, because IO failed!".format(
                                         conf.name
                                     )
                                 )
                                 results.remove(conf)
-                    print("Constructed all new folders.")
+                    print("Constructed all necessary folders.")
 
                     if not results:
                         print("ERROR: No conformers left!")
-                        write_json("save_and_exit", json_dict, jsonfile)
+                        input_object.write_json("save_and_exit")
 
                     # place prep in queue:
                     instructprep = {
@@ -11220,49 +11042,34 @@ def part3(
                         "basis": args.basis3,
                         "solv": args.solv,
                         "sm": "gas",
-                        "boltzmann": args.boltzmann,
+                        "environ": environsettings,
                         "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
-                    if args.sm3 == "smd" and args.solv:
-                        instructprep["sm"] = "smd"  # solvation consider during SP
-                    elif args.sm3 == "dcosmors" and args.solv:
-                        instructprep["sm"] = "dcosmors"  # solvation consider during SP
-                    else:
+                    if args.solv in (None, 'gas'):
                         instructprep["sm"] = "gas"
-                        # solvation calculated separately with COMSO-RS
+                    else:
+                        if args.sm3 in ("smd", "dcosmors"):
+                            # solvation consider during SP
+                            instructprep["sm"] = args.sm3
+                        elif args.sm3 in input_object.smgsolv2:
+                            # solvation calculated separately with additive 
+                            # solvation correction
+                            instructprep["sm"] = "gas"
+                        elif args.sm3 in ("cosmo", "cpcm"):
+                            instructprep["sm"] = args.sm3
+                    ifcrashed = {"sp_part3":"failed",
+                                 "consider_for_part4": False,
+                                 "energy_sp_part3": None,
+                                 }
+                    ###CHECK
+                    if args.solv in ("gas", None) or args.sm3 in input_object.smgsolv2:
+                        ifcrashed["sp_part3_gas"] = "failed"
+                    else:
+                        ifcrashed["sp_part3_solv"] = "failed"
 
-                    results = run_in_parallel(
-                        q, resultq, job, maxthreads, results, instructprep, args.func3
-                    )
-                    exit_log, fail_rate = check_tasks(results, args)
+                    results, input_object, save_errors = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'single-point', args.func3, instructprep, ifcrashed)
 
-                    # sort out conformers with crashed preparations
-                    for i in list(results):
-                        if not i.success:
-                            print(
-                                "\nERROR: A problem has occurred in the single-point preperation of {}! The conformer"
-                                " is removed.\n".format(i.name)
-                            )
-                            json_dict[i.name]["sp_part3"] = "failed"
-                            json_dict[i.name]["consider_for_part4"] = False
-                            json_dict[i.name]["energy_sp_part3"] = None
-                            save_errors.append(
-                                "Conformer {} was removed, because preparation failed!".format(
-                                    i.name
-                                )
-                            )
-                            results.remove(i)
-
-                    if exit_log:
-                        print(
-                            "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                                fail_rate
-                            )
-                        )
-                        write_json("save_and_exit", json_dict, jsonfile)
-                    print("Preparation completed.")
-
-                    # place SP work in queue:
+                    # place single-point work in queue:
                     instructsp = {
                         "jobtype": "sp",
                         "chrg": args.chrg,
@@ -11270,17 +11077,17 @@ def part3(
                         "func": args.func3,
                         "solv": args.solv,
                         "basis": args.basis3,
-                        "boltzmann": args.boltzmann,
+                        "environ": environsettings,
                         "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
-                    if job == tm_job:
+                    if args.prog3 == "tm":
                         instructsp["progsettings"]["tempprogpath"] = ""
-                    elif job == orca_job:
-                        instructsp["progsettings"]["tempprogpath"] = orcapath
-                        instructsp["progsettings"]["orca_old"] = orca_old
+                    elif args.prog3 == "orca":
+                        instructsp["progsettings"]["tempprogpath"] = input_object.orcapath
+                        instructsp["progsettings"]["orca_old"] = input_object.orca_old
 
                     results = run_in_parallel(
-                        q, resultq, job, maxthreads, results, instructsp, args.func3
+                        q, resultq, job, int(args.maxthreads), results, instructsp, args.func3
                     )
                     exit_log, fail_rate = check_tasks(results, args)
 
@@ -11288,87 +11095,68 @@ def part3(
                     for i in list(results):
                         if not i.success:
                             print(
-                                "\nERROR: A problem has occurred in the single-point calculation of {}! The conformer"
+                                "\nERROR: A problem has occurred in the "
+                                "single-point calculation of {}! The conformer"
                                 " is removed.\n".format(i.name)
                             )
-                            json_dict[i.name]["sp_part3"] = "failed"
-                            json_dict[i.name]["consider_for_part4"] = False
-                            json_dict[i.name]["energy_sp_part3"] = None
+                            input_object.json_dict[i.name]["sp_part3"] = "failed"
+                            ###CHECK
+                            if args.solv in ("gas", None) or args.sm3 in input_object.smgsolv2:
+                                input_object.json_dict[conf.name]["sp_part3_gas"] = "failed"
+                            else:
+                                input_object.json_dict[conf.name]["sp_part3_solv"] = "failed"
+                            input_object.json_dict[i.name]["consider_for_part4"] = False
+                            input_object.json_dict[i.name]["energy_sp_part3"] = None
                             save_errors.append(
-                                "Conformer {} was removed, because the single-point calculation "
-                                "failed!".format(i.name)
+                                "Conformer {} was removed, because the single-point"
+                                " calculation failed!".format(i.name)
                             )
                             results.remove(i)
                     # write energies to json_dict
-                    for i in results:
-                        json_dict[i.name]["sp_part3"] = "calculated"
-                        json_dict[i.name]["energy_sp_part3"] = i.energy
+                    for conf in results:
                         # write energy to sp3_energy
-                        i.sp3_energy = i.energy
-
+                        conf.sp3_energy = conf.energy
+                        conf.energy = None
+                        input_object.json_dict[conf.name]["sp_part3"] = "calculated"
+                        input_object.json_dict[conf.name]["energy_sp_part3"] = conf.sp3_energy
+                        ###CHECK
+                        if args.solv in ("gas", None) or args.sm3 in input_object.smgsolv2:
+                            input_object.json_dict[conf.name]["sp_part3_gas"] = "calculated"
+                            input_object.json_dict[conf.name]["energy_sp_part3_gas"] = conf.sp3_energy
+                        else:
+                            input_object.json_dict[conf.name]["sp_part3_solv"] = "calculated"
+                            input_object.json_dict[conf.name]["energy_sp_part3_solv"] = conf.sp3_energy
                     if exit_log:
                         print(
                             "\nERROR: too many single-points failed ({:.2f} %)!".format(
                                 fail_rate
                             )
                         )
-                        write_json("save_and_exit", json_dict, jsonfile)
+                        input_object.write_json("save_and_exit")
                     # end of sp for new conformers
 
                 # adding conformers calculated before to results
                 try:
                     length = max([len(str(i.name)) for i in tmp_results])
                 except ValueError:
-                    length = 4 + int(args.nstruc)
+                    length = 4 + int(args.nconf)
                 for item in tmp_results:
                     print(
                         "single-point energy of {:{digits}}: {:.7f}".format(
-                            item.name, item.energy, digits=length
+                            item.name, item.sp3_energy, digits=length
                         )
                     )
                     results.append(item)
                 results.sort(key=lambda x: int(x.name[4:]))
 
-                if len(results) == 0:
+                if not results:
                     print("ERROR: No conformers left!")
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
 
                 print("\nGSOLV")
-                if args.sm3 in ("cosmors", "gbsa_gsolv") and args.solv:
-                    # calculate only GBSA-Gsolv or COSMO-RS
-                    results = additive_gsolv(
-                        args,
-                        q,
-                        resultq,
-                        job,
-                        True,
-                        False,
-                        results,
-                        json_dict,
-                        jsonfile,
-                        save_errors,
-                        digilen,
-                    )
-                else:
-                    for conf in results:
-                        # if COSMO-RS was used in part 2 but not in part 3, gsolv has to be reset here
-                        conf.gsolv = 0.00
-                    if args.sm3 == "smd" and args.solv:
-                        print(
-                            "Gsolv values are included in the single-point calculations with SMD.\n"
-                        )
-                    elif args.sm3 == "dcosmors" and args.solv:
-                        print(
-                            "Gsolv values are included in the single-point calculations with DCOSMO-RS.\n"
-                        )
-                    elif not args.solv:
-                        print(
-                            "Since the calculation is performed in gas phase, Gsolv is not required.\n"
-                        )
-
-                if not args.rrhoprog == "off":
-                    # run RRHO
-                    results, save_errors = rrho_part23(
+                if args.sm3 in input_object.smgsolv2 and args.solv not in (None, 'gas'):
+                    # calculate only additive solvation: GBSA-Gsolv or COSMO-RS smd_gsolv
+                    results, input_object = additive_gsolv(
                         args,
                         q,
                         resultq,
@@ -11376,145 +11164,96 @@ def part3(
                         False,
                         True,
                         results,
-                        json_dict,
-                        jsonfile,
+                        input_object,
                         save_errors,
-                        digilen,
                         cwd,
+                        environsettings
                     )
-                else:
+                else: # not additive solvation!
+                    for conf in results:
+                        # if additive solvation was used in part2 but not in 
+                        # part3, gsolv has to be reset here
+                        conf.gsolv = 0.00
+                    if args.sm3 not in input_object.smgsolv2 and args.solv not in (None, 'gas'):
+                        print(
+                            "Gsolv values are included in the single-point "
+                            "calculations with {}.\n".format(str(args.sm3).upper())
+                        )
+                    elif args.solv in (None, 'gas'):
+                        print(
+                            "Since the calculation is performed in gas phase, "
+                            "Gsolv is not required.\n"
+                        )
+                if not args.rrhoprog:
                     # skipp RRHO calculation:
                     for conf in results:
                         conf.rrho = 0.0
                     # enso.json will not be updated with rrho information!
+                else:
+                    # run RRHO
+                    results, input_object, save_errors = rrho_part23(
+                        args,
+                        q,
+                        resultq,
+                        job,
+                        False,
+                        True,
+                        results,
+                        input_object,
+                        save_errors,
+                        cwd,
+                        environsettings
+                    )
+            #END if not args.boltzmann
+
+            ######XXX
             for i in results:  # calculate free energy
                 if (
-                    i.energy is not None
+                    i.sp3_energy is not None
                     and i.rrho is not None
                     and isinstance(i.gsolv, float)
                 ):
-                    i.free_energy = i.energy + i.gsolv + i.rrho
+                    i.free_energy = i.sp3_energy + i.gsolv + i.rrho
                 else:
                     # something went wrong and we do not know what, so reset everything
                     print(
                         "The conformer {} was removed because the free energy could not be calculated!"
                         "{}: energy: {}, rrho: {}, gsolv: {}.".format(
-                            i.name, i.name, i.energy, i.rrho, i.gsolv
+                            i.name, i.name, i.sp3_energy, i.rrho, i.gsolv
                         )
                     )
-                    json_dict[i.name]["sp_part3"] = "failed"
-                    json_dict[i.name]["energy_sp_part3"] = None
-                    if args.gsolv2 == "cosmors" and args.solv:
-                        json_dict[i.name]["cosmo-rs"] = "failed"
-                        json_dict[i.name]["energy_cosmo-rs"] = None
-                    if args.gsolv2 == "gbsa_gsolv" and args.solv:
-                        json_dict[i.name]["gbsa_gsolv"] = "failed"
-                        json_dict[i.name]["energy_gbsa_gsolv"] = None
-                    json_dict[i.name]["rrho"] = "failed"
-                    json_dict[i.name]["energy_rrho"] = None
-                    json_dict[i.name]["consider_for_part4"] = False
+                    input_object.json_dict[i.name]["consider_for_part4"] = False
                     save_errors.append(
                         "Error in summing up free energy for conformer {}".format(
                             i.name
                         )
                     )
                     results.remove(i)
+           
+            #sorting for part3 on high level free energy basis
 
-            # check for None in free_energy:
-            counter = 0
-            allitems = len(results)
-            for conf in list(results):
-                if conf.free_energy is None:
-                    counter += 1
-                    save_errors.append(
-                        "Error in free energy for conformer {}".format(conf.name)
-                    )
-                    results.remove(conf)
-                    print("removed {}, because free energy is None.".format(conf.name))
-            if len(results) == 0:
-                print("\nERROR: all free energies are None!")
-                write_json("save_and_exit", json_dict, jsonfile)
-
-            # calculate delta G
-            if len([item for item in results if item.free_energy is not None]) == 1:
-                minfree = [
-                    item.free_energy for item in results if item.free_energy is not None
-                ][0]
-            else:
-                try:
-                    minfree = min(
-                        [
-                            item.free_energy
-                            for item in results
-                            if item.free_energy is not None
-                        ]
-                    )
-                except:
-                    print("No value to calculate difference for PART3!")
-                    write_json("save_and_exit", json_dict, jsonfile)
-            for item in results:
-                item.rel_free_energy = (item.free_energy - minfree) * 627.50947428
-
-            print("\n*********************************")
-            print("* {:^29} *".format("Gibbs free energies of part 3"))
-            print("*********************************")
-            print(
-                "CONF#          E [Eh]       Gsolv [Eh]   RRHO [Eh]    Gtot [Eh]    rel. Gtot [kcal/mol]]\n"
-            )
-            lowestfree = min(
-                [item.free_energy for item in results if item.free_energy is not None]
-            )
-            for i in results:
-                if i.free_energy != lowestfree:
-                    print(
-                        "{:10}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f}".format(
-                            i.name,
-                            i.energy,
-                            i.gsolv,
-                            i.rrho,
-                            i.free_energy,
-                            i.rel_free_energy,
-                        )
-                    )
-                else:
-                    print(
-                        "{:10}  {:>10.7f},  {:>10.7f},  {:>10.7f},  {:>10.7f} {:>10.2f} <----- lowest".format(
-                            i.name,
-                            i.energy,
-                            i.gsolv,
-                            i.rrho,
-                            i.free_energy,
-                            i.rel_free_energy,
-                        )
-                    )
-
-            if float(counter) / allitems >= 0.25 and args.check:
-                print(
-                    "\nERROR: too many free energies are None ({:.2f} %)!".format(
-                        float(counter) / float(allitems) * 100
-                    )
-                )
-                write_json("save_and_exit", json_dict, jsonfile)
-
+            results, save_errors, minfree, input_object = sorting_part23(args, results, 'part3', input_object, save_errors)
+            print('')
+            # get gi degeneracy for results and tmp_results
+            results, tmp_results, input_object = get_degeneracy(cwd, results, tmp_results, input_object)
             print("Calculate Boltzmann populations")
-            au2J = 4.3597482e-18  # a.u.(hartree/mol) to J
+            au2j = 4.3597482e-18  # a.u.(hartree/mol) to J
             # kcalmol2J = 7.993840458653155e-21  # kcal/mol to J  =   *4.184 / N_{A}
             kb = 1.3806485279e-23  # J/K
             try:
                 T = float(args.temperature)
             except:
-                print("WARNING:Temperature could not be converted using T=298.15 K")
+                print("WARNING:Temperature could not be converted using T= 298.15 K")
                 T = 298.15  # K
             ## avoid division by zero
             if T == 0:
                 T += 0.00001
-            args.temperature
             sum = 0.0
             for item in results:
-                sum += math.exp(-((item.free_energy - minfree) * au2J) / (kb * T))
+                sum += item.degeneracy *  math.exp(-((item.free_energy - minfree) * au2j) / (kb * T))
             for item in results:
                 item.bm_weight = (
-                    math.exp(-((item.free_energy - minfree) * au2J) / (kb * T)) / sum
+                    item.degeneracy * math.exp(-((item.free_energy - minfree) * au2j) / (kb * T)) / sum
                 )
 
             # sort out all conformers  with a Boltzmann population smaller
@@ -11531,30 +11270,31 @@ def part3(
             sum = 0.0
             for item in results:
                 if item.name in bw_list:
-                    sum += math.exp(-((item.free_energy - minfree) * au2J) / (kb * T))
+                    sum += item.degeneracy * math.exp(-((item.free_energy - minfree) * au2j) / (kb * T))
             for item in results:
                 if item.name in bw_list:
                     item.new_bm_weight = (
-                        math.exp(-((item.free_energy - minfree) * au2J) / (kb * T))
+                        item.degeneracy * math.exp(-((item.free_energy - minfree) * au2j) / (kb * T))
                         / sum
                     )
                 else:
                     item.new_bm_weight = 0.0
 
             print("\n*********************************")
-            print("* {:^29} *".format("boltzmann weight of part 3"))
+            print("* {:^29} *".format("boltzmann weight of part3"))
             print("*********************************")
             print(
-                "#CONF         Gtot [Eh]   rel Gtot[kcal/mol]   boltzmann old [%]   boltzmann new [%] \n"
+                "#CONF         Gtot [Eh]   rel Gtot[kcal/mol]   boltzmann old [%]   boltzmann new [%]   gi  \n"
             )
             for item in results:
                 print(
-                    "{:10} {:>12.7f}  {:>12.2f}  {:>18.2f}  {:>17.2f}".format(
+                    "{:10} {:>12.7f}  {:>12.2f}  {:>18.2f}  {:>17.2f}  {:>13.2f}".format(
                         str(item.name),
                         item.free_energy,
                         item.rel_free_energy,
                         100 * item.bm_weight,
                         100 * item.new_bm_weight,
+                        item.degeneracy
                     )
                 )
 
@@ -11569,7 +11309,7 @@ def part3(
                 if conf.new_bm_weight == 0.0:
                     continue
                 print(conf.name)
-                json_dict[conf.name]["consider_for_part4"] = True
+                input_object.json_dict[conf.name]["consider_for_part4"] = True
                 sum_bw += conf.new_bm_weight
                 if sum_bw >= thr3:
                     break
@@ -11577,14 +11317,14 @@ def part3(
                     continue
             # remove conformers from list results if they are not considered further
             for conf in list(results):
-                if not json_dict[conf.name]["consider_for_part4"]:
+                if not input_object.json_dict[conf.name]["consider_for_part4"]:
                     results.remove(conf)
             results.sort(key=lambda x: int(x.name[4:]))
 
             # check if at least one calculation was successful
             if not results:
                 print("\nERROR: No conformers left!")
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
 
         # the following is executed even if there is only one conformer left
         #  write anmr files, required by anmr program
@@ -11594,13 +11334,15 @@ def part3(
 
         # write populated confs from part3
         move_recursively(cwd, "populated-conf-part3.xyz")
+        move_recursively(cwd, "populated-conf-part3_G.xyz")
         write_trj(
             sorted(results, key=lambda x: float(x.free_energy)),
+            cwd,
             "populated-conf-part3.xyz",
             args.func,
+            args.nat
         )
-
-        write_json("save", json_dict, jsonfile)
+        input_object.write_json("save")
 
         if save_errors:
             print("***---------------------------------------------------------***")
@@ -11610,213 +11352,105 @@ def part3(
             print("***---------------------------------------------------------***")
 
         print("\n END of part3.\n")
-    else:  # if part 3 is switched off
+    else:  # if part3 is switched off
         print("PART3 has been skipped by user.")
-        print("Reading from file {} if necessary.\n".format(jsonfile))
+        print("Reading from file {} if necessary.\n".format(input_object.jsonfile))
         try:
             results
         except NameError:
             results = []
-    return results, json_dict
+    return results, input_object
 
 
-def part4(
-    args,
-    results,
-    jsonfile,
-    cwd,
-    json_dict,
-    maxthreads,
-    xtbpath,
-    environsettings,
-    rotdict,
-    spectrumlist,
-    escfpath,
-    mpshiftpath,
-):
-    """ """
+def part4(args, results, cwd, environsettings, rotdict, input_object):
+    """Calculation of coupling and shielding constants on populated conformers """
     save_errors = []
     removelist = []
     print("\n-----------------------------------------------------------")
     print(" PART 4 - couplings and shieldings")
     print("-----------------------------------------------------------\n")
-    digilen = 60
-    if args.part4 == "on":
-        if args.unpaired > 0:
-            print(
-                "ERROR: Coupling and shift calculation is only available for "
-                "closed-shell systems!"
-            )
-            write_json("save_and_exit", json_dict, jsonfile)
-        print(
-            "main program: {:{digits}} {}".format(
-                "", args.prog, digits=digilen - len("main program")
-            )
-        )
-        if args.prog4:
-            print(
-                "program for part 4: {:{digits}} {}".format(
-                    "", args.prog4, digits=digilen - len("program for part 4")
-                )
-            )
-            if args.prog4 == "tm":
-                job = tm_job
-            elif args.prog4 == "orca":
-                job = orca_job
-        else:
-            args.prog4 = args.prog
-            print(
-                "program for part 4 was automatically set to: "
-                "{:{digits}} {}".format(
+    if args.part4:
+        # print flags for part4
+        info = []
+        info.append(["prog4", "program for part4", args.prog4])
+        info.append(["couplings", "calculate couplings", args.calcJ])
+        if args.calcJ:
+            info.append(["funcJ", "functional for coupling calculation", args.funcJ])
+            info.append(["basisJ", "basis set for coupling calculation", args.basisJ])
+        info.append(["shieldings", "calculate shieldings", args.calcS])
+        if args.calcS:
+            info.append(["funcS", "functional for shielding calculation", args.funcS])
+            info.append(["basisS", "basis set for shielding calculation", args.basisS])
+        if args.solv not in ('gas', None):
+            info.append(["sm4", "solvent model", args.sm4])
+            info.append(["solvent", "Solvent", args.solv])
+        info.append(["justprint", "calculating spectra for: {:{digits}} {}".format(
+                "", ", ".join(input_object.spectrumlist),
+                digits=input_object.digilen - len("calculating spectra for"))])
+        if args.hactive and args.href is not None:
+            info.append(["reference for 1H", "reference for 1H", args.href])
+        if args.cactive and args.cref is not None:
+            info.append(["reference for 13C", "reference for 13C", args.cref])
+        if args.factive and args.fref is not None:
+            info.append(["reference for 19F", "reference for 19F", args.fref])
+        if args.siactive and args.siref is not None:
+            info.append(["reference for 29Si", "reference for 29Si", args.siref])
+        if args.pactive and args.pref is not None:
+            info.append(["reference for 31P", "reference for 31P", args.pref])
+        info.append(["resonance frequency", "resonance frequency", args.mf])
+        optionsexchange = {True: 'on', False: 'off'}
+        for item in info:
+            if item[0] == 'justprint':
+                print(item[1:][0])
+            else:
+                option = getattr(args, input_object.key_args_dict.get(item[0], item[0]))
+                if option is True or option is False:
+                    tmpopt = optionsexchange[option]
+                else:
+                    tmpopt = option
+                if item[0] in ('sm', 'sm3', 'smgsolv2', 'sm4') and option is None:
+                    tmpopt = 'sm'
+                print("{}: {:{digits}} {}".format(
+                    item[1],
                     "",
-                    args.prog4,
-                    digits=digilen - len("program for part 4 was automatically set to"),
-                )
-            )
-            if args.prog4 == "tm":
-                job = tm_job
-            elif args.prog4 == "orca":
-                job = orca_job
-        print(
-            "calculate couplings: {:{digits}} {}".format(
-                "", args.calcJ, digits=digilen - len("calculate couplings")
-            )
-        )
-        print(
-            "functional for coupling calculation: {:{digits}} {}".format(
-                "",
-                args.funcJ,
-                digits=digilen - len("functional for coupling calculation"),
-            )
-        )
-        if args.basisJ == "default":
-            if job == tm_job:
-                args.basisJ = "def2-TZVP"
-            elif job == orca_job:
-                args.basisJ = "pcJ-0"
-        print(
-            "basis set for coupling calculation: {:{digits}} {}".format(
-                "",
-                args.basisJ,
-                digits=digilen - len("basis set for coupling calculation"),
-            )
-        )
-        print(
-            "calculate shieldings: {:{digits}} {}".format(
-                "", args.calcS, digits=digilen - len("calculate shieldings")
-            )
-        )
-        print(
-            "functional for shielding calculation: {:{digits}} {}".format(
-                "",
-                args.funcS,
-                digits=digilen - len("functional for shielding calculation"),
-            )
-        )
-        if args.basisS == "default":
-            if job == tm_job:
-                args.basisS = "def2-TZVP"
-            elif job == orca_job:
-                args.basisS = "pcSseg-2"
-        print(
-            "basis set for shielding calculation: {:{digits}} {}".format(
-                "",
-                args.basisS,
-                digits=digilen - len("basis set for shielding calculation"),
-            )
-        )
-        if args.prog4 == "tm" and args.solv:
-            if args.sm4 != "cosmo":
-                print(
-                    "WARNING: With TM, only COSMO is available as solvent model for"
-                    " the shielding and coupling constants."
-                )
-                args.sm4 = "cosmo"
-        elif args.prog4 == "orca" and args.solv:
-            if args.sm4 != "cpcm" and args.sm4 != "smd":
-                print(
-                    "WARNING: With ORCA, only CPCM or SMD are avaible as solvent"
-                    " model for the shielding and coupling constants.\n"
-                    " CPCM is set as default."
-                )
-                args.sm4 = "cpcm"
-        if args.solv:
-            print(
-                "solvent model: {:{digits}} {}".format(
-                    "", args.sm4, digits=digilen - len("solvent model")
-                )
-            )
-        print(
-            "calculating spectra for: {:{digits}} {}".format(
-                "",
-                ", ".join(spectrumlist),
-                digits=digilen - len("calculating spectra for"),
-            )
-        )
-        if "1H" in spectrumlist:
-            print(
-                "reference for 1H: {:{digits}} {}".format(
-                    "", str(args.href), digits=digilen - len("reference for 1H")
-                )
-            )
-        if "13C" in spectrumlist:
-            print(
-                "reference for 13C: {:{digits}} {}".format(
-                    "", str(args.cref), digits=digilen - len("reference for 13C")
-                )
-            )
-        if "19F" in spectrumlist:
-            print(
-                "reference for 19F: {:{digits}} {}".format(
-                    "", str(args.fref), digits=digilen - len("reference for 19F")
-                )
-            )
-        if "31P" in spectrumlist:
-            print(
-                "reference for 31P: {:{digits}} {}".format(
-                    "", str(args.pref), digits=digilen - len("reference for 31P")
-                )
-            )
-        if "29Si" in spectrumlist:
-            print(
-                "reference for 29Si: {:{digits}} {}".format(
-                    "", str(args.siref), digits=digilen - len("reference for 29Si")
-                )
-            )
-
-        print(
-            "resonance frequency: {:{digits}} {}".format(
-                "", str(args.mf), digits=digilen - len("resonance frequency")
-            )
-        )
-        print("")
+                    tmpopt,
+                    digits=input_object.digilen-len(item[1])
+                    ))
+        # end print
+        if args.prog4 == "tm":
+            job = tm_job
+        elif args.prog4 == "orca":
+            job = orca_job
 
         # setup queues
         q = Queue()
         resultq = Queue()
 
         # COUPLINGS
-        if args.calcJ == "on":
+        if args.calcJ:
             tmp_results = []
             # list with conformers calculated before
-            if args.part3 == "on":  # use all conformers of list results
+            if args.part3:  # use all conformers of list results
                 for item in list(results):
                     # it is possible to calculate multiple nuclei at once,
                     # so check for each nuc if it was
                     # calculated before or if it failed
                     tmp_failed = False
                     tmp_calculate = False
-                    for nuc in spectrumlist:
+                    for nuc in input_object.spectrumlist:
                         nuc_string = "".join(nuc + "_J")
-                        if json_dict[item.name][nuc_string] == "not_calculated":
+                        if input_object.json_dict[item.name][nuc_string] == "not_calculated":
                             tmp_calculate = True
-                        elif json_dict[item.name][nuc_string] == "failed":
+                        elif input_object.json_dict[item.name][nuc_string] == "failed":
                             tmp_failed = True
                             print(
                                 "ERROR: The {} coupling calculation for {} failed"
                                 " in the previous run!\n"
                                 "The conformer is sorted out.".format(nuc, item.name)
                             )
+                            save_errors.append("ERROR: The {} coupling calculation for {} failed"
+                                " in the previous run!\n"
+                                "The conformer is sorted out.".format(nuc, item.name))
                             break
                     if tmp_failed:
                         results.remove(item)
@@ -11825,34 +11459,37 @@ def part4(
                         # for this conformer, all activated coupling calculation
                         # were performed in the previous run
                         tmp_results.append(results.pop(results.index(item)))
-            if args.part3 == "off":
+            if not args.part3:
                 # use all conformers with 'consider_for_part4' = True
-                if firstrun:  # not possible
+                if input_object.firstrun:  # not possible
                     print(
                         "ERROR: Part 3 is switched off but the file {} containing"
                         " all information of the previous "
-                        "run cannot be found!".format(jsonfile)
+                        "run cannot be found!".format(input_object.jsonfile)
                     )
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
                 results = []  # list of conformers that have to be calculated now
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["consider_for_part4"]:
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["consider_for_part4"]:
                         # it is possible to calculate multiple nuclei at once,
                         # so check for each nuc if it was
                         # calculated before or if it failed
                         tmp_failed = False
                         tmp_calculate = False
-                        for nuc in spectrumlist:
+                        for nuc in input_object.spectrumlist:
                             nuc_string = "".join(nuc + "_J")
-                            if json_dict[item][nuc_string] == "not_calculated":
+                            if input_object.json_dict[item][nuc_string] == "not_calculated":
                                 tmp_calculate = True
-                            elif json_dict[item][nuc_string] == "failed":
+                            elif input_object.json_dict[item][nuc_string] == "failed":
                                 tmp_failed = True
                                 print(
                                     "ERROR: The {} coupling calculation for {} "
                                     "failed in the previous run! The "
                                     "conformer is sorted out.".format(nuc, item.name)
                                 )
+                                save_errors.append("ERROR: The {} coupling calculation for {} "
+                                    "failed in the previous run! The "
+                                    "conformer is sorted out.".format(nuc, item.name))
                                 removelist.append(item.name)
                                 break
                         if tmp_calculate and not tmp_failed:
@@ -11869,10 +11506,10 @@ def part4(
                             tmp.success = True
                             tmp_results.append(tmp)
 
-            for item in json_dict:
+            for item in input_object.json_dict:
                 if "CONF" in item:
-                    if json_dict[item]["removed_by_user"]:
-                        for conf in tmp_results:
+                    if input_object.json_dict[item]["removed_by_user"]:
+                        for conf in list(tmp_results):
                             if item == conf.name:
                                 tmp_results.remove(conf)
                                 removelist.append(conf.name)
@@ -11881,7 +11518,7 @@ def part4(
                                         item
                                     )
                                 )
-                        for conf in results:
+                        for conf in list(results):
                             if item == conf.name:
                                 results.remove(conf)
                                 removelist.append(conf.name)
@@ -11890,14 +11527,14 @@ def part4(
                                     "user!".format(item)
                                 )
             if not tmp_results and not results:
-                print("ERROR: There are no conformers for part 4!\n" " Going to exit!")
+                print("ERROR: There are no conformers for part4!\n" " Going to exit!")
                 sys.exit()
             print(
                 "number of further considered conformers: {:{digits}}"
                 " {}".format(
                     "",
                     str(len(results) + len(tmp_results)),
-                    digits=digilen - len("number of further considered conformers"),
+                    digits=input_object.digilen - len("number of further considered conformers"),
                 )
             )
             if tmp_results:
@@ -11944,8 +11581,8 @@ def part4(
                         elif not os.path.isdir(tmp_to):
                             print("ERROR: Could not create folder {}!".format(tmp_to))
                         print("ERROR: Removing conformer {}!".format(conf.name))
-                        for nuc in spectrumlist:
-                            json_dict[conf.name]["".join(nuc + "_J")] = "failed"
+                        for nuc in input_object.spectrumlist:
+                            input_object.json_dict[conf.name]["".join(nuc + "_J")] = "failed"
                         save_errors.append(
                             "Conformer {} was removed, because IO failed!".format(
                                 conf.name
@@ -11957,9 +11594,9 @@ def part4(
 
                 if not results:
                     print("ERROR: No conformers left!")
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
 
-                if job == tm_job:
+                if args.prog4 == 'tm':
                     # need converged mos, therefore,
                     # cefine and single-point have to be performed
                     # before NMR calculations
@@ -11974,50 +11611,20 @@ def part4(
                         "solv": args.solv,
                         "sm": args.sm4,
                         "NMR": True,
+                        "environ": environsettings,
                         "progsettings": {"omp": args.omp, "tempprogpath": ""},
+                        "hactive": args.hactive,
+                        "cactive": args.cactive,
+                        "factive": args.factive,
+                        "pactive": args.pactive,
+                        "siactive": args.siactive,
                     }
-                    if args.hactive == "on":
-                        instructprep["hactive"] = True
-                    if args.cactive == "on":
-                        instructprep["cactive"] = True
-                    if args.factive == "on":
-                        instructprep["factive"] = True
-                    if args.pactive == "on":
-                        instructprep["pactive"] = True
-                    if args.siactive == "on":
-                        instructprep["siactive"] = True
-                    results = run_in_parallel(
-                        q, resultq, job, maxthreads, results, instructprep, "NMR"
-                    )
-                    exit_log, fail_rate = check_tasks(results, args)
-
-                    # sort out conformers for which the single-point calculation failed
-                    for item in list(results):
-                        if not item.success:
-                            print(
-                                "\nERROR: A problem has occurred in the "
-                                "single-point preparation of {} required for "
-                                "the coupling calculation with TM! The conformer "
-                                "is removed.\n".format(item.name)
-                            )
-                            for nuc in spectrumlist:
-                                # update json_dict
-                                nuc_string = "".join(nuc + "_J")
-                                json_dict[item.name][nuc_string] = "failed"
-                            save_errors.append(
-                                "Conformer {} was removed, because single-point "
-                                "preparation failed!".format(item.name)
-                            )
-                            results.remove(item)
-                            removelist.append(item.name)
-                    if exit_log:
-                        print(
-                            "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                                fail_rate
-                            )
-                        )
-                        write_json("save_and_exit", json_dict, jsonfile)
-                    print("Preparation completed.")
+                    ifcrashed = {}
+                    for nuc in input_object.spectrumlist:
+                        # update json_dict
+                        ifcrashed["".join(nuc + "_J")] = "failed"
+                    
+                    results, input_object, save_errors, removelist = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'single-point ', 'NMR', instructprep, ifcrashed, removelist)
 
                     # place SP work in queue:
                     instructsp = {
@@ -12027,16 +11634,17 @@ def part4(
                         "func": args.funcJ,
                         "solv": args.solv,
                         "basis": args.basisJ,
+                        "environ": environsettings,
                         "progsettings": {"omp": args.omp, "tempprogpath": ""},
                     }
                     if job == tm_job:
                         instructsp["progsettings"]["tempprogpath"] = ""
                     elif job == orca_job:
-                        instructsp["progsettings"]["tempprogpath"] = orcapath
-                        instructsp["progsettings"]["orca_old"] = orca_old
+                        instructsp["progsettings"]["tempprogpath"] = input_object.orcapath
+                        instructsp["progsettings"]["orca_old"] = input_object.orca_old
 
                     results = run_in_parallel(
-                        q, resultq, job, maxthreads, results, instructsp, "NMR"
+                        q, resultq, job, int(args.maxthreads), results, instructsp, "NMR"
                     )
                     exit_log, fail_rate = check_tasks(results, args)
 
@@ -12059,10 +11667,10 @@ def part4(
                                 "the coupling calculation with TM! The conformer "
                                 "is removed.\n".format(item.name)
                             )
-                            for nuc in spectrumlist:
+                            for nuc in input_object.spectrumlist:
                                 # update json_dict
                                 nuc_string = "".join(nuc + "_J")
-                                json_dict[item.name][nuc_string] = "failed"
+                                input_object.json_dict[item.name][nuc_string] = "failed"
                             save_errors.append(
                                 "Conformer {} was removed, because the "
                                 "single-point calculation failed!".format(item.name)
@@ -12075,7 +11683,7 @@ def part4(
                                 fail_rate
                             )
                         )
-                        write_json("save_and_exit", json_dict, jsonfile)
+                        input_object.write_json("save_and_exit")
 
                     # move mos to mos-keep_J
                     for item in results:
@@ -12090,7 +11698,7 @@ def part4(
 
                 # calculate J
                 # place work in queue
-                instructJ = {
+                instruct_j = {
                     "jobtype": "nmrJ",
                     "chrg": args.chrg,
                     "unpaired": args.unpaired,
@@ -12098,26 +11706,22 @@ def part4(
                     "basis": args.basisJ,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "environ": environsettings,
                     "progsettings": {"omp": args.omp},
+                    "hactive": args.hactive,
+                    "cactive": args.cactive,
+                    "factive": args.factive,
+                    "pactive": args.pactive,
+                    "siactive": args.siactive,
                 }
-                if args.hactive == "on":
-                    instructJ["hactive"] = True
-                if args.cactive == "on":
-                    instructJ["cactive"] = True
-                if args.factive == "on":
-                    instructJ["factive"] = True
-                if args.pactive == "on":
-                    instructJ["pactive"] = True
-                if args.siactive == "on":
-                    instructJ["siactive"] = True
                 if job == tm_job:
-                    instructJ["progsettings"]["tempprogpath"] = escfpath
+                    instruct_j["progsettings"]["tempprogpath"] = input_object.escfpath
                 elif job == orca_job:
-                    instructJ["progsettings"]["tempprogpath"] = orcapath
-                    instructJ["progsettings"]["orca_old"] = orca_old
+                    instruct_j["progsettings"]["tempprogpath"] = input_object.orcapath
+                    instruct_j["progsettings"]["orca_old"] = input_object.orca_old
 
                 results = run_in_parallel(
-                    q, resultq, job, maxthreads, results, instructJ, "NMR"
+                    q, resultq, job, int(args.maxthreads), results, instruct_j, "NMR"
                 )
                 exit_log, fail_rate = check_tasks(results, args)
 
@@ -12130,8 +11734,8 @@ def part4(
                                 item.name
                             )
                         )
-                        for nuc in spectrumlist:
-                            json_dict[item.name]["".join(nuc + "_J")] = "failed"
+                        for nuc in input_object.spectrumlist:
+                            input_object.json_dict[item.name]["".join(nuc + "_J")] = "failed"
                         save_errors.append(
                             "Conformer {} was removed, because the couplings calculation "
                             "failed!".format(item.name)
@@ -12140,9 +11744,9 @@ def part4(
                         removelist.append(item.name)
                 # update json_dict
                 for item in results:
-                    for nuc in spectrumlist:
+                    for nuc in input_object.spectrumlist:
                         nuc_string = "".join(nuc + "_J")
-                        json_dict[item.name][nuc_string] = "calculated"
+                        input_object.json_dict[item.name][nuc_string] = "calculated"
 
                 if exit_log:
                     print(
@@ -12150,7 +11754,7 @@ def part4(
                             fail_rate
                         )
                     )
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
 
             # adding conformers calculated before to results
             for item in tmp_results:
@@ -12158,32 +11762,34 @@ def part4(
             results.sort(key=lambda x: int(x.name[4:]))
 
             # check if at least one conformer is left:
-            if len(results) == 0:
+            if not results:
                 print("ERROR: No conformers left!")
-                write_json("save_and_exit", json_dict, jsonfile)
+                input_object.write_json("save_and_exit")
 
             print("Coupling calculations completed.\n")
 
         # SHIELDINGS
-        if args.calcS == "on":
+        if args.calcS:
             tmp_results = []
             # list with conformers calculated before
-            if args.calcJ == "on" or args.part3 == "on":
+            if args.calcJ or args.part3:
                 for item in list(results):
                     # it is possible to calculate multiple nuclei at once,
                     # so check for each nuc if it was calculated before or if it failed
                     tmp_failed = False
                     tmp_calculate = False
-                    for nuc in spectrumlist:
+                    for nuc in input_object.spectrumlist:
                         nuc_string = "".join(nuc + "_S")
-                        if json_dict[item.name][nuc_string] == "not_calculated":
+                        if input_object.json_dict[item.name][nuc_string] == "not_calculated":
                             tmp_calculate = True
-                        elif json_dict[item.name][nuc_string] == "failed":
+                        elif input_object.json_dict[item.name][nuc_string] == "failed":
                             tmp_failed = True
                             print(
                                 "ERROR: The {} shielding calculation for {} failed in the previous run! The "
                                 "conformer is sorted out.".format(nuc, item.name)
                             )
+                            save_errors.append("ERROR: The {} shielding calculation for {} failed in the previous run! The "
+                                "conformer is sorted out.".format(nuc, item.name))
                             break
                     if tmp_failed:
                         results.remove(item)
@@ -12195,30 +11801,35 @@ def part4(
                     elif tmp_calculate and not tmp_failed:
                         # this conformer has to be calculated now
                         pass
-            elif args.part3 == "off" and args.calcJ == "off":
+            elif not args.part3 and not args.calcJ:
                 # use all conformers with 'consider_for_part4' = True
-                if firstrun:  # not possible
+                if input_object.firstrun:  # not possible
                     print(
                         "ERROR: Part 3 is switched off but the file {} containing"
                         "\n       all information of the previous "
-                        "run cannot be found!".format(jsonfile)
+                        "run cannot be found!".format(input_object.jsonfile)
                     )
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
                 results = []
                 # list of conformers that have to be calculated now
-                for item in json_dict:
-                    if "CONF" in item and json_dict[item]["consider_for_part4"]:
+                for item in input_object.json_dict:
+                    if "CONF" in item and input_object.json_dict[item]["consider_for_part4"]:
                         # it is possible to calculate multiple nuclei at once,
                         # so check for each nuc if it was calculated before or if it failed
                         tmp_failed = False
                         tmp_calculate = False
-                        for nuc in spectrumlist:
+                        for nuc in input_object.spectrumlist:
                             nuc_string = "".join(nuc + "_S")
-                            if json_dict[item][nuc_string] == "not_calculated":
+                            if input_object.json_dict[item][nuc_string] == "not_calculated":
                                 tmp_calculate = True
-                            elif json_dict[item][nuc_string] == "failed":
+                            elif input_object.json_dict[item][nuc_string] == "failed":
                                 tmp_failed = True
                                 print(
+                                    "ERROR: The {} shielding calculation for {} "
+                                    "failed in the previous run!\n The "
+                                    "conformer is sorted out.".format(nuc, item.name)
+                                )
+                                save_errors.append(
                                     "ERROR: The {} shielding calculation for {} "
                                     "failed in the previous run!\n The "
                                     "conformer is sorted out.".format(nuc, item.name)
@@ -12240,14 +11851,14 @@ def part4(
                             tmp_results.append(tmp)
 
             if not tmp_results and not results:
-                print("ERROR: There are no conformers for part 4!")
+                print("ERROR: There are no conformers for part4!")
                 sys.exit()
             print(
                 "number of further considered conformers: {:{digits}} "
                 "{}".format(
                     "",
                     str(len(results) + len(tmp_results)),
-                    digits=digilen - len("number of further considered conformers"),
+                    digits=input_object.digilen - len("number of further considered conformers"),
                 )
             )
             if tmp_results:
@@ -12291,8 +11902,8 @@ def part4(
                         elif not os.path.isdir(tmp_to):
                             print("ERROR: Could not create folder {}!".format(tmp_to))
                         print("ERROR: Removing conformer {}!".format(conf.name))
-                        for nuc in spectrumlist:
-                            json_dict[conf.name]["".join(nuc + "_S")] = "failed"
+                        for nuc in input_object.spectrumlist:
+                            input_object.json_dict[conf.name]["".join(nuc + "_S")] = "failed"
                         save_errors.append(
                             "Conformer {} was removed, because IO failed!".format(
                                 conf.name
@@ -12304,16 +11915,10 @@ def part4(
 
                 if not results:
                     print("ERROR: No conformers left!")
-                    write_json("save_and_exit", json_dict, jsonfile)
+                    input_object.write_json("save_and_exit")
 
-                if job == tm_job:
-                    do_cefine = False
-                    if args.calcJ == "off":
-                        do_cefine = True
-                    else:
-                        if args.funcJ != args.funcS and args.basisS != args.basisJ:
-                            do_cefine = True
-                    if do_cefine:
+                if args.prog4 == 'tm':
+                    if not args.calcJ or (args.funcJ != args.funcS) or (args.basisS != args.basisJ):
                         # need converged mos, therefore,
                         # cefine and single-point have to be performed before NMR calculations
                         # place work in queue:
@@ -12326,53 +11931,20 @@ def part4(
                             "solv": args.solv,
                             "sm": args.sm4,
                             "NMR": True,
+                            "environ": environsettings,
                             "progsettings": {"omp": args.omp, "tempprogpath": ""},
+                            "hactive": args.hactive,
+                            "cactive": args.cactive,
+                            "factive": args.factive,
+                            "pactive": args.pactive,
+                            "siactive": args.siactive,
                         }
-                        if args.hactive == "on":
-                            instructprep["hactive"] = True
-                        if args.cactive == "on":
-                            instructprep["cactive"] = True
-                        if args.factive == "on":
-                            instructprep["factive"] = True
-                        if args.pactive == "on":
-                            instructprep["pactive"] = True
-                        if args.siactive == "on":
-                            instructprep["siactive"] = True
-                        results = run_in_parallel(
-                            q, resultq, job, maxthreads, results, instructprep, "NMR"
-                        )
-                        exit_log, fail_rate = check_tasks(results, args)
-
-                        # sort out conformers for which the single-point calculation failed
-                        for item in list(results):
-                            if not item.success:
-                                print(
-                                    "\nERROR: A problem has occurred in the single-point "
-                                    "preparation of {} required for the shielding "
-                                    "calculation with TM! The conformer is removed.\n".format(
-                                        item.name
-                                    )
-                                )
-                                for nuc in spectrumlist:
-                                    # update json_dict
-                                    nuc_string = "".join(nuc + "_S")
-                                    json_dict[item.name][nuc_string] = "failed"
-                                save_errors.append(
-                                    "Conformer {} was removed, because single-point"
-                                    " preparation failed!".format(item.name)
-                                )
-                                results.remove(item)
-                                removelist.append(item.name)
-
-                        if exit_log:
-                            print(
-                                "\nERROR: too many preparations failed ({:.2f} %)!".format(
-                                    fail_rate
-                                )
-                            )
-                            write_json("save_and_exit", json_dict, jsonfile)
-
-                        print("Preparation completed.")
+                        ifcrashed = {}
+                        for nuc in input_object.spectrumlist:
+                            # update json_dict
+                            ifcrashed["".join(nuc + "_S")] = "failed"
+                        
+                        results, input_object, save_errors, removelist = prepforQM(args, q, resultq, job, save_errors, results, input_object, 'single-point', 'NMR', instructprep, ifcrashed, removelist)
 
                         # place SP work in queue:
                         instructsp = {
@@ -12382,15 +11954,16 @@ def part4(
                             "func": args.funcS,
                             "solv": args.solv,
                             "basis": args.basisS,
+                            "environ": environsettings,
                             "progsettings": {"omp": args.omp, "tempprogpath": ""},
                         }
                         if job == tm_job:
                             instructsp["progsettings"]["tempprogpath"] = ""
                         elif job == orca_job:
-                            instructsp["progsettings"]["tempprogpath"] = orcapath
-                            instructsp["progsettings"]["orca_old"] = orca_old
+                            instructsp["progsettings"]["tempprogpath"] = input_object.orcapath
+                            instructsp["progsettings"]["orca_old"] = input_object.orca_old
                         results = run_in_parallel(
-                            q, resultq, job, maxthreads, results, instructsp, "NMR"
+                            q, resultq, job, int(args.maxthreads), results, instructsp, "NMR"
                         )
                         exit_log, fail_rate = check_tasks(results, args)
 
@@ -12413,10 +11986,10 @@ def part4(
                                         item.name
                                     )
                                 )
-                                for nuc in spectrumlist:
+                                for nuc in input_object.spectrumlist:
                                     # update json_dict
                                     nuc_string = "".join(nuc + "_S")
-                                    json_dict[item.name][nuc_string] = "failed"
+                                    input_object.json_dict[item.name][nuc_string] = "failed"
                                 save_errors.append(
                                     "Conformer {} was removed, because single-point calculation "
                                     "failed!".format(item.name)
@@ -12440,11 +12013,11 @@ def part4(
                                     fail_rate
                                 )
                             )
-                            write_json("save_and_exit", json_dict, jsonfile)
+                            input_object.write_json("save_and_exit")
 
                         print("single-points completed.")
 
-                instructS = {
+                instruct_s = {
                     "jobtype": "nmrS",
                     "chrg": args.chrg,
                     "unpaired": args.unpaired,
@@ -12452,26 +12025,22 @@ def part4(
                     "basis": args.basisS,
                     "solv": args.solv,
                     "sm": args.sm4,
+                    "environ": environsettings,
                     "progsettings": {"omp": args.omp, "tempprogpath": ""},
+                    "hactive": args.hactive,
+                    "cactive": args.cactive,
+                    "factive": args.factive,
+                    "siactive": args.siactive,
+                    "pactive": args.pactive
                 }
-                if args.hactive == "on":
-                    instructS["hactive"] = True
-                if args.cactive == "on":
-                    instructS["cactive"] = True
-                if args.factive == "on":
-                    instructS["factive"] = True
-                if args.pactive == "on":
-                    instructS["pactive"] = True
-                if args.siactive == "on":
-                    instructS["siactive"] = True
                 if job == tm_job:
-                    instructS["progsettings"]["tempprogpath"] = mpshiftpath
+                    instruct_s["progsettings"]["tempprogpath"] = input_object.mpshiftpath
                 elif job == orca_job:
-                    instructS["progsettings"]["tempprogpath"] = orcapath
-                    instructS["progsettings"]["orca_old"] = orca_old
+                    instruct_s["progsettings"]["tempprogpath"] = input_object.orcapath
+                    instruct_s["progsettings"]["orca_old"] = input_object.orca_old
 
                 results = run_in_parallel(
-                    q, resultq, job, maxthreads, results, instructS, "NMR"
+                    q, resultq, job, int(args.maxthreads), results, instruct_s, "NMR"
                 )
                 exit_log, fail_rate = check_tasks(results, args)
 
@@ -12483,8 +12052,8 @@ def part4(
                                 conf.name
                             )
                         )
-                        for nuc in spectrumlist:
-                            json_dict[conf.name]["".join(nuc + "_S")] = "failed"
+                        for nuc in input_object.spectrumlist:
+                            input_object.json_dict[conf.name]["".join(nuc + "_S")] = "failed"
                         save_errors.append(
                             "Conformer {} was removed, because the shielding calculation "
                             "failed!".format(conf.name)
@@ -12492,8 +12061,8 @@ def part4(
                         results.remove(conf)
                         removelist.append(conf.name)
                     else:
-                        for nuc in spectrumlist:
-                            json_dict[conf.name]["".join(nuc + "_S")] = "calculated"
+                        for nuc in input_object.spectrumlist:
+                            input_object.json_dict[conf.name]["".join(nuc + "_S")] = "calculated"
 
                 if exit_log:
                     print(
@@ -12502,52 +12071,30 @@ def part4(
                         )
                     )
             print("Shielding calculations completed.")
-        write_json("save", json_dict, jsonfile)
+        input_object.write_json("save")
         # write generic:
         instructgeneric = {
             "jobtype": "genericout",
-            "nat": nat,
+            "nat": int(args.nat),
+            "environ": environsettings,
             "progsettings": {"omp": args.omp, "tempprogpath": ""},
         }
         results = run_in_parallel(
-            q, resultq, job, maxthreads, results + tmp_results, instructgeneric, "NMR"
+            q, resultq, job, int(args.maxthreads), results + tmp_results, instructgeneric, "NMR"
         )
         # exit_log, fail_rate = check_tasks(results, args)
 
         # write .anmrrc
         print("\nwriting .anmrrc")
-        writing_anmrrc(
-            args.prog,
-            args.func,
-            args.sm,
-            args.sm4,
-            args.funcS,
-            args.basisS,
-            args.solv,
-            args.mf,
-            args.href,
-            args.cref,
-            args.fref,
-            args.pref,
-            args.siref,
-            args.hactive,
-            args.cactive,
-            args.factive,
-            args.pactive,
-            args.siactive,
-            args.calcJ,
-            args.calcS,
-            save_errors,
-        )
+        save_errors = writing_anmrrc(args, cwd, save_errors)
         # check if rotamers of each other are still remaining in the final ensemble
         if rotdict:
             try:
                 length = max([len(j) for i in rotdict.items() for j in i])
-                for item in results + tmp_results:
+                for item in results:
                     if item.name in rotdict.keys():
                         if rotdict[item.name] in [
-                            x.name for x in results + tmp_results
-                        ]:
+                        x.name for x in results]:
                             save_errors.append(
                                 "Possible rotamers of each other still in final "
                                 "ensemble: {:{digits}} <--> {:{digits}}. Please "
@@ -12570,124 +12117,115 @@ def part4(
             correct_anmr_enso(cwd, removelist)
 
         print("\n END of part4.\n")
-    else:  # if part 4 is switched off
+    else:  # if part4 is switched off
         print("PART4 has been skipped by user\n")
     print("-----------------------------------------------------------")
     if (
-        args.part1 == "off"
-        and args.part2 == "off"
-        and args.part3 == "off"
-        and args.part4 == "off"
+        not args.part1
+        and not args.part2
+        and not args.part3
+        and not args.part4
     ):
-        write_json("save", json_dict, jsonfile)
+        input_object.write_json("save")
     return
 
-
-# start of ENSO:
-if __name__ == "__main__":
-
+def main(argv=None):
     cwd = os.getcwd()
     # RUNNING ENSO STARTUP
     (
         args,
-        jsonfile,
-        json_dict,
-        firstrun,
-        conformersxyz,
-        nat,
-        maxthreads,
-        xtbpath,
-        environsettings,
-        dbpath,
-        cosmothermversion,
-        cosmorssetup,
-        orcapath,
-        orca_old,
-        crestpath,
-        mpshiftpath,
-        escfpath,
-        spectrumlist,
-    ) = enso_startup(cwd)
+        input_object
+    ) = enso_startup(cwd,argv)
+
+    #RUNNING PRINTOUT OF PART1 only based on enso.json
+    if args.doprintout and args.part1:
+        printout_part1(args, input_object)
+    #RUNNING PRINTOUT OF PART2 only based on enso.json
+    if args.doprintout and args.part2:
+        printout_part2(args, input_object)
+    #RUNNING PRINTOUT OF PART3 only based on enso.json
+    if args.doprintout and args.part3:
+        printout_part3(args, input_object)
 
     # RUNNING PART1
-    try:
-        results, json_dict = part1(
-            args,
-            jsonfile,
-            json_dict,
-            conformersxyz,
-            nat,
-            maxthreads,
-            xtbpath,
-            environsettings,
-        )
-    except Exception as e:
-        print("ERROR in part1!")
-        print("The error-message is {}\n\n".format(e))
-        traceback.print_exc()
-        print("Going to exit!")
-        sys.exit(1)
+    if not args.doprintout:
+        try:
+            results, input_object = part1(
+                args,
+                input_object.environsettings,
+                input_object,
+            )
+        except Exception as error:
+            print("ERROR in part1!")
+            print("\nThe error-message is {}\n".format(error))
+            print('**********************Traceback for debugging:*************************')
+            traceback.print_exc()
+            print('***********************************************************************')
+            print("Going to exit!")
+            sys.exit(1)
 
     # RUNNING PART2
-    try:
-        results, json_dict, rotdict = part2(
-            args,
-            results,
-            jsonfile,
-            cwd,
-            json_dict,
-            maxthreads,
-            xtbpath,
-            environsettings,
-        )
-    except Exception as e:
-        print("ERROR in part2!")
-        print("The error-message is {}\n\n".format(e))
-        traceback.print_exc()
-        print("Going to exit!")
-        sys.exit(1)
+    if not args.doprintout:
+        try:
+            results, input_object, rotdict = part2(
+                args,
+                results,
+                input_object.cwd,
+                input_object.environsettings,
+                input_object,
+            )
+        except Exception as error:
+            print("ERROR in part2!")
+            print("\nThe error-message is {}\n".format(error))
+            print('**********************Traceback for debugging:*************************')
+            traceback.print_exc()
+            print('***********************************************************************')
+            print("Going to exit!")
+            sys.exit(1)
 
     # RUNNING PART3
-    try:
-        results, json_dict = part3(
-            args,
-            results,
-            jsonfile,
-            cwd,
-            json_dict,
-            maxthreads,
-            xtbpath,
-            environsettings,
-        )
-    except Exception as e:
-        print("ERROR in part3!")
-        print("The error-message is {}\n\n".format(e))
-        traceback.print_exc()
-        print("Going to exit!")
-        sys.exit(1)
+    if not args.doprintout:
+        try:
+            results, input_object = part3(
+                args,
+                results,
+                input_object.cwd,
+                input_object.environsettings,
+                input_object,
+            )
+        except Exception as error:
+            print("ERROR in part3!")
+            print("\nThe error-message is {}\n".format(error))
+            print('**********************Traceback for debugging:*************************')
+            traceback.print_exc()
+            print('***********************************************************************')
+            print("Going to exit!")
+            sys.exit(1)
 
     # RUNNING PART4
-    try:
-        part4(
-            args,
-            results,
-            jsonfile,
-            cwd,
-            json_dict,
-            maxthreads,
-            xtbpath,
-            environsettings,
-            rotdict,
-            spectrumlist,
-            escfpath,
-            mpshiftpath,
-        )
-    except Exception as e:
-        print("ERROR in part4!")
-        print("The error-message is {}\n\n".format(e))
-        traceback.print_exc()
-        print("Going to exit!")
-        sys.exit(1)
+    if not args.doprintout:
+        try:
+            part4(
+                args,
+                results,
+                input_object.cwd,
+                input_object.environsettings,
+                rotdict,
+                input_object,
+            )
+        except Exception as error:
+            print("ERROR in part4!")
+            print("\nThe error-message is {}\n".format(error))
+            print('**********************Traceback for debugging:*************************')
+            traceback.print_exc()
+            print('***********************************************************************')
+            print("Going to exit!")
+            sys.exit(1)
 
     # ALL DONE
     print("\nENSO all done!")
+
+
+# start of ENSO:
+if __name__ == "__main__":
+    main(argv=None)
