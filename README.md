@@ -1,3 +1,5 @@
+[![Latest Version](https://img.shields.io/github/v/release/grimme-lab/enso)](https://github.com/grimme-lab/enso/releases/latest)
+
 ENSO program
 ============
 
