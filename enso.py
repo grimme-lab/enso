@@ -9112,7 +9112,7 @@ def prepforQM(args, q, resultq, job, save_errors, results, input_object, prepfor
                 "preparation for {}! The conformer "
                 "is removed.\n".format(prepfor, i.name)
             )
-            for key, value in ifcrashed:
+            for key, value in ifcrashed.items():
                 input_object.json_dict[i.name][key] = value
             save_errors.append(
                 "Conformer {} was removed, because preparation "
