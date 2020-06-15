@@ -8364,7 +8364,11 @@ class handle_input:
         print("    CREST:        {}".format(self.crestpath))
         if needtm:
             tmpath = shutil.which('ridft')
-            print('    TURBOMOLE:    {}'.format(os.path.dirname(tmpath)))
+            if tmpath is not None:
+                tmpath = os.path.dirname(tmpath)
+            else:
+                tmpath = "None"
+            print('    TURBOMOLE:    {}'.format(tmpath))
         if needescf:
             print("    escf:         {}".format(self.escfpath))
         if needmpshift:
