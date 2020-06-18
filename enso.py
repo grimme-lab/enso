@@ -3171,7 +3171,7 @@ def writing_anmrrc(args, cwd, save_errors):
     if args.funcS == 'pbeh-3c':
         lbasisS = "def2-mSVP"
         
-    if args.basisS != "def2-TZVP" and args.funcS is not 'pbeh-3c':
+    if args.basisS != "def2-TZVP" and args.funcS != 'pbeh-3c':
         print(
             "WARNING: The reference shielding constant was calculated with the "
             "basis def2-TZVP (basisS)!"
@@ -3414,7 +3414,7 @@ class qm_job():
                     stdout=outputfile,
                     env=self.environ,
                 )
-            if returncode is not 0:
+            if returncode != 0:
                 self.gsolv = None
                 self.success = False
                 print(
@@ -3500,7 +3500,7 @@ class qm_job():
                     stdout=outputfile,
                     env=self.environ,
                 )
-            if returncode is not 0:
+            if returncode != 0:
                 self.gsolv = None
                 self.success = False
                 print(
@@ -3640,7 +3640,7 @@ class qm_job():
                 )
             time.sleep(0.05)
             # check if converged:
-            if returncode is not 0:
+            if returncode != 0:
                 self.rrho = None
                 self.success = False
                 print(
@@ -4667,7 +4667,7 @@ class tm_job(qm_job):
                     stdout=outputfile,
                     env=self.environ,
                 )
-            if returncode is not 0:
+            if returncode != 0:
                 self.energy = None
                 self.success = False
                 print(
