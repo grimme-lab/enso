@@ -3593,6 +3593,7 @@ class qm_job():
             ) as xcout:
                 xcout.write("$thermo\n")
                 xcout.write("    temp={}\n".format(self.temperature))
+                xcout.write("    imagthr={}\n".format('-50'))
                 xcout.write("$symmetry\n")
                 xcout.write("    desy=0.3\n")
                 xcout.write("$end")
@@ -3606,6 +3607,7 @@ class qm_job():
                         "coord",
                         "--" + gfnhamiltonian,
                         "--ohess",
+                        "tight",
                         "--gbsa",
                         self.solv,
                         "--chrg",
@@ -3621,6 +3623,7 @@ class qm_job():
                         "coord",
                         "--" + gfnhamiltonian,
                         "--ohess",
+                        "tight",
                         "-chrg",
                         str(self.chrg),
                         "--enso",
@@ -4023,13 +4026,13 @@ class tm_job(qm_job):
             for line in checkup:
                 if "functional" in line:
                     if self.func == "b97-3c":
-                        testfunc = "b973c"
+                        testfunc = ["b973c", "b97-3c"]
                     else:
-                        testfunc = self.func
+                        testfunc = [self.func]
                     if self.jobtype == "solv": 
                         #cosmors setup
-                        testfunc = "b-p"
-                    if testfunc not in line:
+                        testfunc = ["b-p"]
+                    if not any(func in line for func in testfunc):
                         print(
                             "Wrong functional in control file"
                             " in {}".format(last_folders(self.workdir, 2))
@@ -4348,6 +4351,7 @@ class tm_job(qm_job):
             # run two single-points:
             # cefine in gas phase
             tmp_solv = self.solv
+            self.sm = None
             self.solv = 'gas'
             self.cefine()
             #reset solv:
@@ -4445,7 +4449,7 @@ class tm_job(qm_job):
                 if self.progsettings["cosmothermversion"] > 16:
                     pass
                 else:  # cosmothermX16
-                    out.write("\n")  # needs empty line!
+                    out.write("!!\n")  # needs empty line!
                 out.write(cosmors_solv[self.solv] + "fdir=" + solv_data + " autoc \n")
                 out.write("f = out.cosmo \n")
                 for line in henry:
@@ -5249,7 +5253,7 @@ class orca_job(qm_job):
             ],
             "pbeh-3c": [
                 "%MaxCore 8000",
-                "! def2-mSVP pbeh-3c grid3",
+                "! def2-mSVP pbeh-3c grid4",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5259,7 +5263,7 @@ class orca_job(qm_job):
             ],
             "tpss": [
                 "%MaxCore 8000",
-                "! def2-TZVP(-f) tpss  grid4 d3bj",
+                "! def2-TZVP(-f) tpss grid4 d3bj",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5271,7 +5275,7 @@ class orca_job(qm_job):
                 "%MaxCore 8000",
                 "! "
                 + str(self.basis)
-                + " pw6b95 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
+                + " pw6b95 grid5 nofinalgrid rijcosx def2/j d3bj loosescf nososcf gridx4",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5283,7 +5287,7 @@ class orca_job(qm_job):
                 "%MaxCore 8000",
                 "! "
                 + str(self.basis)
-                + " pbe0 grid5 rijcosx def2/j d3bj loosescf nososcf gridx4",
+                + " pbe0 grid5 nofinalgrid rijcosx def2/j d3bj loosescf nososcf gridx4",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5293,7 +5297,7 @@ class orca_job(qm_job):
             ],
             "dsd-blyp": [
                 "%MaxCore 8000",
-                "! def2-TZVPP def2-TZVPP/c ri-dsd-blyp frozencore grid5 rijk def2/jk d3bj",
+                "! def2-TZVPP def2-TZVPP/c ri-dsd-blyp frozencore grid5 nofinalgrid rijk def2/jk d3bj",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5305,7 +5309,7 @@ class orca_job(qm_job):
                 "%MaxCore 8000",
                 "! "
                 + str(self.basis)
-                + " wb97x-d3 grid5 rijcosx def2/j loosescf nososcf gridx4",
+                + " wb97x-d3 grid5 nofinalgrid rijcosx def2/j loosescf nososcf gridx4",
                 "!     smallprint printgap noloewdin",
                 "%output",
                 "       print[P_BondOrder_M] 1",
@@ -5340,7 +5344,7 @@ class orca_job(qm_job):
             ],
             "tpss": [
                 "%MaxCore 8000",
-                "! def2-TZVP(-f) tpss grid4",
+                "! def2-TZVP(-f) tpss grid4 d3bj",
                 "!ENGRAD",
                 "!     smallprint printgap noloewdin",
                 "%output",
@@ -5351,7 +5355,7 @@ class orca_job(qm_job):
             ],
             "pbe0": [
                 "%MaxCore 8000",
-                "! def2-TZVP(-f) pbe0 grid4",
+                "! def2-TZVP(-f) pbe0 grid4 d3bj",
                 "!ENGRAD",
                 "!     smallprint printgap noloewdin",
                 "%output",
@@ -5385,7 +5389,7 @@ class orca_job(qm_job):
                 ],
                 "tpss": [
                     "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss Opt grid4",
+                    "! def2-TZVP(-f) tpss Opt grid4 d3bj",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -5395,7 +5399,7 @@ class orca_job(qm_job):
                 ],
                 "pbe0": [
                     "%MaxCore 8000",
-                    "! def2-TZVP(-f) pbe0 Opt grid4",
+                    "! def2-TZVP(-f) pbe0 Opt grid4 d3bj",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -5890,7 +5894,7 @@ class orca_job(qm_job):
             ofreq_calls = {
                 "b97-3c": [
                     "%MaxCore 8000",
-                    "! def2-mTZVP b97-3c grid5 NumFreq",
+                    "! def2-mTZVP b97-3c grid5 nofinalgrid NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -5900,7 +5904,7 @@ class orca_job(qm_job):
                 ],
                 "pbeh-3c": [
                     "%MaxCore 8000",
-                    "! def2-mSVP pbeh-3c grid5 NumFreq",
+                    "! def2-mSVP pbeh-3c grid5 nofinalgrid NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -5910,7 +5914,7 @@ class orca_job(qm_job):
                 ],
                 "tpss": [
                     "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss grid5 NumFreq",
+                    "! def2-TZVP(-f) tpss grid5 d3bj nofinalgrid NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -5942,7 +5946,7 @@ class orca_job(qm_job):
                 ],
                 "tpss": [
                     "%MaxCore 8000",
-                    "! def2-TZVP(-f) tpss Opt grid4 NumFreq",
+                    "! def2-TZVP(-f) tpss Opt d3bj grid4 NumFreq",
                     "!     smallprint printgap noloewdin",
                     "%output",
                     "       print[P_BondOrder_M] 1",
@@ -6928,8 +6932,6 @@ class handle_input:
         "reference for 19F": "fref",
         "reference for 29Si": "siref",
     }
-    # später für unittest!
-    # print(list(set(known_keys) - set(key_args_dict.keys())))
 
     enso_internal_defaults = OrderedDict([
         ("nconf", None),
@@ -6980,55 +6982,6 @@ class handle_input:
         ("29Si active", "off"),
         ("resonance frequency", None),
     ])
-    # enso_internal_defaults = {
-    #     "reference for 1H": "TMS",
-    #     "reference for 13C": "TMS",
-    #     "reference for 19F": "CFCl3",
-    #     "reference for 31P": "TMP",
-    #     "reference for 29Si": "TMS",
-    #     "1H active": "on",
-    #     "13C active": "off",
-    #     "19F active": "off",
-    #     "31P active": "off",
-    #     "29Si active": "off",
-    #     "resonance frequency": None,
-    #     "nconf": None,
-    #     "charge": "0",
-    #     "unpaired": "0",
-    #     "solvent": "gas",
-    #     "prog": None,
-    #     "ancopt": "on",
-    #     "prog_rrho": "xtb",
-    #     "gfn_version": "gfn2",
-    #     "temperature": "298.15",
-    #     "prog3": "prog",
-    #     "prog4": "prog",
-    #     "part1": "on",
-    #     "part2": "on",
-    #     "part3": "on",
-    #     "part4": "on",
-    #     "boltzmann": "off",
-    #     "backup": "off",
-    #     "func": "pbeh-3c",
-    #     "func3": "pw6b95",
-    #     "basis3": "def2-TZVPP",
-    #     "funcJ": "pbe0",
-    #     "basisJ": "def2-TZVP",
-    #     "funcS": "pbe0",
-    #     "basisS": "def2-TZVP",
-    #     "couplings": "on",
-    #     "shieldings": "on",
-    #     "part1_threshold": "6.0",
-    #     "part2_threshold": "2.0",
-    #     "sm": "default",
-    #     "smgsolv2": "sm",
-    #     "sm3": "default",
-    #     "sm4": "default",
-    #     "check": "on",
-    #     "crestcheck": "off",
-    #     "maxthreads": "1",
-    #     "omp": "1",
-    # }
 
     knownbasissets3 = [
         "SVP",
