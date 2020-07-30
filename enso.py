@@ -9111,7 +9111,7 @@ def enso_startup(cwd, argv=None):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 2.0.1                  |
+    |                   version 2.0.2                  |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|
