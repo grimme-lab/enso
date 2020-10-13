@@ -5126,6 +5126,9 @@ class tm_job(qm_job):
                 )
             )
             self.success = False
+        except ValueError:
+            print('ValueError in generic_output, nmrprop.dat can be flawed')
+            self.success = False
         self.success = True
         fnamecoupl = "escf.out"
         atom1 = []
@@ -5140,12 +5143,12 @@ class tm_job(qm_job):
             ) as inp:
                 data = inp.readlines()
             for line in data:
-                if "Nuclear coupling constants in Hz" in line:
+                if "Nuclear coupling constants" in line:
                     start = int(data.index(line)) + 3
                 if "-----------------------------------" in line:
                     end = int(data.index(line))
             for line in data[start:end]:
-                if len(line.split()) == 6:
+                if len(line.split()) in (6,7):
                     splitted = line.split()
                     atom1.append(int(splitted[1]))
                     atom2.append(int(splitted[4].split(":")[0]))
@@ -5156,6 +5159,9 @@ class tm_job(qm_job):
                     fnamecoupl, last_folders(self.workdir, 2)
                 )
             )
+            self.success = False
+        except ValueError:
+            print('ValueError in generic_output, nmrprop.dat can be flawed')
             self.success = False
         self.success = True
         with open(os.path.join(self.workdir, "nmrprop.dat"), "w", newline=None) as out:
@@ -9111,7 +9117,7 @@ def enso_startup(cwd, argv=None):
     |          for automated NMR calculations          |
     |             University of Bonn, MCTC             |
     |                    July 2018                     |
-    |                   version 2.0.2                  |
+    |                   version 2.0.3                  |
     |  F. Bohle, K. Schmitz, J. Pisarek and S. Grimme  |
     |                                                  |
     |__________________________________________________|
