@@ -18,7 +18,7 @@
 
 """
 Created on Jan 11, 2019
-last updated on 02-June-2020
+last updated on 12-September-2022
 @author: bohle
 """
 
@@ -29,7 +29,7 @@ descr = """
     |          Plotting of NMR spectral data           |
     |             University of Bonn, MCTC             |
     |                 January 2019                     |
-    |                     v 1.1                        |
+    |                     v 1.1.1                       |
     |                   F. Bohle                       |
     |__________________________________________________|
     """
@@ -391,7 +391,7 @@ if __name__ == "__main__":
               "using filenames as labels.")
         args.label = []
         for file in args.file:
-            if file.split(".")[0] is not "":
+            if file.split(".")[0] != "":
                 args.label.append(file.split(".")[0])
             else:
                 args.label.append(file.split(".")[1])
